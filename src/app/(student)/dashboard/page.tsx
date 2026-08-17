@@ -1,0 +1,298 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import {
+  Send,
+  Star,
+  Calendar,
+  Trophy,
+  TrendingUp,
+  TrendingDown,
+  Sparkles,
+  ArrowRight,
+  MapPin,
+  Clock,
+  CheckCircle2,
+  Eye,
+  ChevronRight,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  studentProfile,
+  studentStats,
+  recommendedDrives,
+  recentActivity,
+} from "@/lib/mock-data";
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const statIconMap: Record<string, React.ElementType> = {
+  send: Send,
+  star: Star,
+  calendar: Calendar,
+  trophy: Trophy,
+};
+
+const activityIconMap: Record<string, React.ElementType> = {
+  sparkles: Sparkles,
+  star: Star,
+  check: CheckCircle2,
+  send: Send,
+  eye: Eye,
+};
+
+const activityColorMap: Record<string, string> = {
+  violet: "bg-[#EDE9FE] text-[#6D28D9]",
+  success: "bg-[#D1FAE5] text-[#065F46]",
+  indigo: "bg-[#EEF2FF] text-[#3730A3]",
+  muted: "bg-muted text-muted-foreground",
+};
+
+const statColors = [
+  { bg: "#EEF2FF", icon: "#4F46E5" },
+  { bg: "#D1FAE5", icon: "#059669" },
+  { bg: "#FEF3C7", icon: "#D97706" },
+  { bg: "#D1FAE5", icon: "#10B981" },
+];
+
+const statusStyles: Record<string, string> = {
+  live: "bg-[#D1FAE5] text-[#065F46]",
+  upcoming: "bg-[#FEF3C7] text-[#92400E]",
+  closed: "bg-muted text-muted-foreground",
+};
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+export default function DashboardPage() {
+  const completion = studentProfile.profileCompletion;
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
+
+      {/* ── Welcome header ── */}
+      <section className="flex flex-col md:flex-row md:items-start gap-5">
+        <div className="flex-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">
+            Good morning 👋
+          </p>
+          <h1 className="text-2xl font-bold text-foreground">
+            Welcome back, {studentProfile.name.split(" ")[0]}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {studentProfile.branch} · {studentProfile.college} · Class of {studentProfile.graduationYear}
+          </p>
+
+          {/* Profile completion */}
+          <div className="mt-4 max-w-sm">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-medium text-foreground">Profile Completion</span>
+              <span className="text-xs font-semibold text-[#4F46E5]">{completion}%</span>
+            </div>
+            <div className="h-2 w-full bg-[#EEF2FF] rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full brand-gradient transition-all duration-700"
+                style={{ width: `${completion}%` }}
+              />
+            </div>
+            <p className="text-xs tracking-tight text-muted-foreground mt-1.5">
+              Complete your profile to improve AI match accuracy
+            </p>
+          </div>
+        </div>
+
+        {/* Quick stats pill */}
+        <div className="flex items-center gap-2 px-4 py-3 bg-card rounded-xl border border-border/60 card-shadow shrink-0">
+          <div className="size-9 rounded-lg ai-gradient flex items-center justify-center">
+            <Sparkles className="size-4 text-white" />
+          </div>
+          <div>
+            <p className="text-xs tracking-tight text-muted-foreground">Your AI Score</p>
+            <p className="text-lg font-bold text-foreground leading-tight">87 / 100</p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Stat cards ── */}
+      <section>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {studentStats.map((stat, i) => {
+            const Icon = statIconMap[stat.icon];
+            const colors = statColors[i];
+            return (
+              <Card key={stat.label} className="card-shadow hover:card-shadow-hover transition-all duration-200 border-border/60">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div
+                      className="size-9 rounded-lg flex items-center justify-center"
+                      style={{ backgroundColor: colors.bg }}
+                    >
+                      <Icon className="size-4.5" style={{ color: colors.icon }} />
+                    </div>
+                    {stat.trendUp !== null && (
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium ${stat.trendUp ? "text-emerald-600" : "text-rose-500"}`}>
+                        {stat.trendUp ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+                        {stat.trend.split(" ")[0]}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
+                  <p className="text-xs tracking-tight text-muted-foreground/70 mt-0.5">{stat.trend}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── Main content grid ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* ── Recommended drives (2/3 width) ── */}
+        <section className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Recommended Drives</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                <Sparkles className="inline size-3 mr-1 text-violet-500" />
+                AI-matched based on your profile
+              </p>
+            </div>
+            <Link href="/drives">
+              <Button variant="ghost" size="sm" className="text-xs gap-1">
+                View all <ChevronRight className="size-3.5" />
+              </Button>
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {recommendedDrives.map((drive) => (
+              <Link key={drive.id} href={`/drives/${drive.id}`}>
+                <Card className="card-shadow hover:card-shadow-hover transition-all duration-200 border-border/60 cursor-pointer group">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      {/* Company logo */}
+                      <div
+                        className="size-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0"
+                        style={{ backgroundColor: drive.companyColor }}
+                      >
+                        {drive.companyInitials}
+                      </div>
+
+                      {/* Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate group-hover:text-[#4F46E5] transition-colors">
+                              {drive.role}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {drive.company}
+                            </p>
+                          </div>
+                          {/* AI Match badge */}
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-[#EDE9FE] text-[#5B21B6] shrink-0">
+                            <Sparkles className="size-3" />
+                            {drive.aiMatch}% match
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <MapPin className="size-3" />
+                            {drive.location}
+                          </span>
+                          <span className="text-xs font-semibold text-foreground">{drive.package}</span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs tracking-tight font-medium ${
+                              statusStyles[drive.status]
+                            }`}
+                          >
+                            <span className="size-1.5 rounded-full inline-block"
+                              style={{ backgroundColor: drive.status === "live" ? "#10B981" : "#F59E0B" }}
+                            />
+                            {drive.status === "live" ? "Live" : "Upcoming"}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-xs tracking-tight text-muted-foreground">
+                            <Clock className="size-3" />
+                            Closes {drive.deadline}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {drive.eligibility.branches.slice(0, 3).map((b) => (
+                            <span key={b} className="px-1.5 py-0.5 bg-accent text-accent-foreground rounded text-xs tracking-tight">
+                              {b}
+                            </span>
+                          ))}
+                          <span className="px-1.5 py-0.5 bg-accent text-accent-foreground rounded text-xs tracking-tight">
+                            CGPA ≥ {drive.eligibility.cgpa}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Recent Activity (1/3 width) ── */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-foreground">Recent Activity</h2>
+            <Link href="/applications">
+              <Button variant="ghost" size="sm" className="text-xs">
+                See all
+              </Button>
+            </Link>
+          </div>
+
+          <Card className="card-shadow border-border/60">
+            <CardContent className="p-0">
+              <div className="divide-y divide-border/60">
+                {recentActivity.map((activity, i) => {
+                  const Icon = activityIconMap[activity.icon];
+                  const colorClass = activityColorMap[activity.color];
+                  return (
+                    <div key={activity.id} className="flex items-start gap-3 px-4 py-3.5 hover:bg-muted/30 transition-colors">
+                      <div className={`size-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${colorClass}`}>
+                        <Icon className="size-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground leading-snug">{activity.message}</p>
+                        <p className="text-xs tracking-tight text-muted-foreground mt-0.5">{activity.company} · {activity.timestamp}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick actions */}
+          <Card className="card-shadow border-l-4 border-l-violet-500 border-border/60 ai-glow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="size-4 text-violet-500" />
+                <p className="text-xs font-semibold text-foreground">AI Recommendation</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Your resume lacks a <strong>Projects</strong> section. Adding 2–3 projects could increase your AI match score by up to <strong>8 points</strong>.
+              </p>
+              <Button size="sm" className="w-full mt-3 ai-gradient text-white text-xs hover:opacity-90">
+                <Sparkles className="size-3 mr-1.5" />
+                Improve Profile
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+      </div>
+    </div>
+  );
+}
