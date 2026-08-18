@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -130,6 +131,7 @@ export default function ManageStudentsPage() {
             <DropdownMenuItem onClick={() => setSelectedStudent(s)} className="text-xs cursor-pointer">
               <Eye className="size-3.5 mr-2" /> View Profile
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             {s.status === "Flagged" && (
               <DropdownMenuItem onClick={() => handleClearFlag(s.id)} className="text-xs text-emerald-600 focus:text-emerald-600 cursor-pointer">
                 <ShieldCheck className="size-3.5 mr-2" /> Clear Flag

@@ -7,9 +7,11 @@ interface CameraBoxProps {
   state: "idle" | "recording" | "analyzing";
   cameraOn?: boolean;
   micOn?: boolean;
+  /** Name to display in the bottom-right name tag */
+  name?: string;
 }
 
-export default function CameraBox({ state, cameraOn = true, micOn = true }: CameraBoxProps) {
+export default function CameraBox({ state, cameraOn = true, micOn = true, name = "You" }: CameraBoxProps) {
   return (
     <div className="relative w-full aspect-video rounded-2xl bg-[#0F172A] overflow-hidden flex items-center justify-center">
 
@@ -80,7 +82,7 @@ export default function CameraBox({ state, cameraOn = true, micOn = true }: Came
 
       {/* Name tag — bottom right */}
       <div className="absolute bottom-3 right-3 bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded text-xs tracking-tight text-white font-medium">
-        Ananya Krishnan
+        {name}
       </div>
     </div>
   );

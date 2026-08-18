@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -94,7 +95,9 @@ export default function NavbarPreview() {
               <ChevronDown className="size-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel className="text-xs">My Account</DropdownMenuLabel>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs">My Account</DropdownMenuLabel>
+              </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-xs gap-2">
                 <User className="size-3.5" /> Profile

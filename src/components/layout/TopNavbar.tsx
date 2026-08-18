@@ -9,12 +9,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { studentProfile, companyProfile, adminProfile } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-context";
 
 interface TopNavbarProps {
   role: "student" | "company" | "admin";
@@ -31,25 +33,20 @@ const adminPageTitles: Record<string, string> = {
 
 export default function TopNavbar({ role, title }: TopNavbarProps) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
-  const profile =
-    role === "admin"
-      ? {
-          name: adminProfile.name,
-          initials: adminProfile.initials,
-          email: adminProfile.email,
-        }
-      : role === "student"
-      ? {
-          name: studentProfile.name,
-          initials: studentProfile.initials,
-          email: studentProfile.email,
-        }
-      : {
-          name: companyProfile.recruiterName,
-          initials: companyProfile.recruiterInitials,
-          email: "recruiter@google.com",
-        };
+  let profile = { name: "Guest", initials: "G", email: "" };
+  if (user) {
+    if (user.role === "admin") {
+      profile = { name: user.full_name || "Admin", initials: "AD", email: user.email };
+    } else if (user.role === "student") {
+      const name = user.full_name || "Student";
+      profile = { name, initials: name.substring(0, 2).toUpperCase(), email: user.email };
+    } else {
+      const name = user.company_name || user.full_name || "Company";
+      profile = { name, initials: name.substring(0, 2).toUpperCase(), email: user.email };
+    }
+  }
 
   const displayTitle = title || (role === "admin" ? adminPageTitles[pathname] || "Admin Portal" : undefined);
 
@@ -93,7 +90,7 @@ export default function TopNavbar({ role, title }: TopNavbarProps) {
       <div className="flex items-center gap-3 shrink-0">
         {/* AI Tools */}
         {role === "student" ? (
-          <Link href="/interview/int-001">
+          <Link href="/applications">
             <button className="hidden md:inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium text-white ai-gradient ai-glow hover:opacity-90 transition-opacity">
               <Sparkles className="size-3.5" />
               AI Tools
@@ -146,9 +143,11 @@ export default function TopNavbar({ role, title }: TopNavbarProps) {
             <ChevronDown className="size-3.5 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground truncate">
-              {profile.email}
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground truncate">
+                {profile.email}
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {role === "student" && (
               <>
@@ -193,7 +192,7 @@ export default function TopNavbar({ role, title }: TopNavbarProps) {
               </>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-xs gap-2 text-rose-500 focus:text-rose-500 cursor-pointer">
+            <DropdownMenuItem onClick={logout} className="text-xs gap-2 text-rose-500 focus:text-rose-500 cursor-pointer">
               <LogOut className="size-3.5" /> Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Send,
@@ -20,11 +22,10 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { applications, type AppStage } from "@/lib/mock-data";
+import { api } from "@/lib/api";
 
-export const metadata: Metadata = {
-  title: "My Applications",
-};
+type AppStage = "applied" | "ai_screened" | "assessment" | "interview" | "shortlisted" | "offer" | "rejected" | "withdrawn";
+
 
 // ── Stage config ───────────────────────────────────────────────────────────────
 
@@ -100,20 +101,75 @@ const stageConfig: Record<
 
 const summaryStages: AppStage[] = ["applied", "ai_screened", "assessment", "interview", "shortlisted", "offer", "rejected"];
 
-function getStageCounts() {
+function getStageCounts(applications: any[]) {
   return summaryStages.map((stage) => ({
     stage,
-    count: applications.filter((a) => a.stage === stage).length,
+    count: applications.filter((a) => a.current_stage === stage).length,
   }));
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function companyDisplay(companyName: string | null) {
+  const name = companyName || "Unknown";
+  const palette = [
+    "#4F46E5", "#0EA5E9", "#10B981", "#F59E0B", "#EF4444",
+    "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16", "#F97316",
+  ];
+  const idx = name.charCodeAt(0) % palette.length;
+  return {
+    initials: (name.substring(0, 2) || "??").toUpperCase(),
+    color: palette[idx],
+  };
+}
+
+function formatDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ApplicationsPage() {
-  const stageCounts = getStageCounts();
+  const [applications, setApplications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadApps = async () => {
+      try {
+        setLoading(true);
+        const data = await api.getMyApplications();
+        setApplications(data);
+      } catch (err: any) {
+        console.error("Failed to fetch applications:", err);
+        setError(err.message || "Failed to load applications.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadApps();
+  }, []);
+
+  if (loading) {
+    return <div className="p-10 text-center">Loading applications...</div>;
+  }
+
+  if (error) {
+    return <div className="p-10 text-center text-red-500">{error}</div>;
+  }
+
+  const stageCounts = getStageCounts(applications);
   const total = applications.length;
   const activeCount = applications.filter(
-    (a) => !["rejected", "withdrawn"].includes(a.stage)
+    (a) => !["rejected", "withdrawn"].includes(a.current_stage)
   ).length;
 
   return (
@@ -190,10 +246,15 @@ export default function ApplicationsPage() {
 
         {/* Rows */}
         <div className="divide-y divide-border/60">
+          {applications.length === 0 && (
+            <div className="p-8 text-center text-muted-foreground text-sm">No applications found.</div>
+          )}
           {applications.map((app) => {
-            const cfg = stageConfig[app.stage];
+            const stage = (app.current_stage || "applied") as AppStage;
+            const cfg = stageConfig[stage] || stageConfig["applied"];
             const Icon = cfg.icon;
-            const isActive = !["rejected", "withdrawn"].includes(app.stage);
+            const isActive = !["rejected", "withdrawn"].includes(stage);
+            const { initials, color } = companyDisplay(app.drive?.company_name);
 
             return (
               <div
@@ -204,41 +265,41 @@ export default function ApplicationsPage() {
                 <div className="flex items-center gap-3">
                   <div
                     className="size-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
-                    style={{ backgroundColor: app.companyColor }}
+                    style={{ backgroundColor: color }}
                   >
-                    {app.companyInitials}
+                    {initials}
                   </div>
                   <div className="md:hidden flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{app.role}</p>
-                    <p className="text-xs text-muted-foreground">{app.company}</p>
+                    <p className="text-sm font-semibold text-foreground truncate">{app.drive?.title}</p>
+                    <p className="text-xs text-muted-foreground">{app.drive?.company_name}</p>
                   </div>
                 </div>
 
                 {/* Role (desktop only) */}
                 <div className="hidden md:flex flex-col justify-center min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate group-hover:text-[#4F46E5] transition-colors">
-                    {app.role}
+                    {app.drive?.title}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {app.company} · {app.type} · {app.package}
+                    {app.drive?.company_name} · {app.drive?.package || "N/A"}
                   </p>
-                  {isActive && app.nextAction && (
+                  {isActive && (
                     <p className="text-xs tracking-tight text-muted-foreground/70 mt-1 flex items-center gap-1">
-                      <Clock className="size-3" /> {app.nextAction}
+                      <Clock className="size-3" /> Updated {formatDate(app.updated_at)}
                     </p>
                   )}
                 </div>
 
                 {/* Applied date */}
                 <div className="hidden md:flex flex-col justify-center items-center">
-                  <p className="text-xs text-foreground whitespace-nowrap">{app.appliedDate}</p>
+                  <p className="text-xs text-foreground whitespace-nowrap">{formatDate(app.applied_at)}</p>
                 </div>
 
                 {/* AI Score */}
                 <div className="hidden md:flex flex-col justify-center items-center">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-[#EDE9FE] text-[#5B21B6]">
                     <Sparkles className="size-3" />
-                    {app.aiScore}
+                    --
                   </span>
                 </div>
 
@@ -259,7 +320,7 @@ export default function ApplicationsPage() {
                 {/* Action */}
                 <div className="hidden md:flex items-center justify-end">
                   {isActive ? (
-                    <Link href={`/drives/${app.driveId}`}>
+                    <Link href={`/drives/${app.drive_id}`}>
                       <Button variant="ghost" size="sm" className="text-xs gap-1 h-7 group-hover:bg-accent">
                         View <ArrowRight className="size-3.5" />
                       </Button>
@@ -272,14 +333,14 @@ export default function ApplicationsPage() {
                 {/* Mobile: extra info */}
                 <div className="md:hidden flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs tracking-tight text-muted-foreground">{app.appliedDate}</span>
+                    <span className="text-xs tracking-tight text-muted-foreground">{formatDate(app.applied_at)}</span>
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs tracking-tight font-bold bg-[#EDE9FE] text-[#5B21B6]">
                       <Sparkles className="size-2.5" />
-                      {app.aiScore}
+                      --
                     </span>
                   </div>
                   {isActive && (
-                    <Link href={`/drives/${app.driveId}`}>
+                    <Link href={`/drives/${app.drive_id}`}>
                       <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
                         View <ArrowRight className="size-3" />
                       </Button>

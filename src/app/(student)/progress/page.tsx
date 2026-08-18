@@ -44,7 +44,7 @@ export default function StudentProgressPage() {
             Track your placement readiness, assessment performance, and upcoming milestones.
           </p>
         </div>
-        <Link href="/interview/int-001">
+        <Link href="/applications">
           <Button className="brand-gradient text-white font-semibold gap-2">
             <Sparkles className="size-4" /> Practice AI Interview
           </Button>

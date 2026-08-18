@@ -60,7 +60,7 @@ export default function ResumeBuilderPage() {
             
             {/* Personal Info */}
             <AccordionItem value="personal" className="border-none bg-white rounded-xl card-shadow overflow-hidden">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-[state=open]:border-b border-border">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-open:border-b border-border">
                 <div className="flex items-center gap-3">
                   <div className="size-8 rounded-lg bg-indigo-50 flex items-center justify-center">
                     <User className="size-4 text-[#4F46E5]" />
@@ -104,7 +104,7 @@ export default function ResumeBuilderPage() {
 
             {/* Education */}
             <AccordionItem value="education" className="border-none bg-white rounded-xl card-shadow overflow-hidden">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-[state=open]:border-b border-border">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-open:border-b border-border">
                 <div className="flex items-center gap-3">
                   <div className="size-8 rounded-lg bg-emerald-50 flex items-center justify-center">
                     <GraduationCap className="size-4 text-emerald-600" />
@@ -120,7 +120,7 @@ export default function ResumeBuilderPage() {
 
             {/* Experience */}
             <AccordionItem value="experience" className="border-none bg-white rounded-xl card-shadow overflow-hidden">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-[state=open]:border-b border-border">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-open:border-b border-border">
                 <div className="flex items-center gap-3">
                   <div className="size-8 rounded-lg bg-amber-50 flex items-center justify-center">
                     <Briefcase className="size-4 text-amber-600" />
@@ -136,7 +136,7 @@ export default function ResumeBuilderPage() {
 
             {/* Projects */}
             <AccordionItem value="projects" className="border-none bg-white rounded-xl card-shadow overflow-hidden">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-[state=open]:border-b border-border">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-open:border-b border-border">
                 <div className="flex items-center gap-3">
                   <div className="size-8 rounded-lg bg-rose-50 flex items-center justify-center">
                     <Code className="size-4 text-rose-600" />
@@ -152,7 +152,7 @@ export default function ResumeBuilderPage() {
 
             {/* Skills & Achievements */}
             <AccordionItem value="skills" className="border-none bg-white rounded-xl card-shadow overflow-hidden">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-[state=open]:border-b border-border">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-open:border-b border-border">
                 <div className="flex items-center gap-3">
                   <div className="size-8 rounded-lg bg-violet-50 flex items-center justify-center">
                     <Award className="size-4 text-violet-600" />

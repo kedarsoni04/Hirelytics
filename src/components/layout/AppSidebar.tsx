@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { studentProfile, companyProfile, adminProfile } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-context";
 
 type NavItem = {
   icon: React.ElementType;
@@ -57,7 +58,7 @@ const studentNavItems: NavGroup[] = [
   {
     group: "AI Tools",
     items: [
-      { icon: Sparkles, label: "AI Interview Prep", href: "/interview/int-001", badge: "New", ai: true },
+      { icon: Sparkles, label: "AI Interview Prep", href: "/applications", badge: "New", ai: true },
       { icon: BookOpen, label: "Resources", href: "/resources" },
     ],
   },
@@ -121,30 +122,43 @@ export default function AppSidebar({ role }: AppSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
 
+  const { user, logout } = useAuth();
+  
   const navItems = role === "admin" ? adminNavItems : role === "student" ? studentNavItems : companyNavItems;
 
-  const profile = role === "admin" ? {
-    name: adminProfile.name,
-    roleOrBranch: "Super Admin",
-    initials: adminProfile.initials,
-  } : role === "student" ? {
-    name: studentProfile.name,
-    roleOrBranch: studentProfile.branch,
-    initials: studentProfile.initials,
-  } : {
-    name: companyProfile.recruiterName,
-    roleOrBranch: companyProfile.recruiterRole,
-    initials: companyProfile.recruiterInitials,
-  };
+  let profile = { name: "Guest", roleOrBranch: "", initials: "G" };
+  if (user) {
+    if (role === "admin") {
+      profile = {
+        name: user.full_name || "Super Admin",
+        roleOrBranch: "Super Admin",
+        initials: "SA",
+      };
+    } else if (role === "student") {
+      const name = user.full_name || "Student";
+      profile = {
+        name,
+        roleOrBranch: user.branch || "Student",
+        initials: name.substring(0, 2).toUpperCase(),
+      };
+    } else {
+      const name = user.company_name || user.full_name || "Company";
+      profile = {
+        name,
+        roleOrBranch: "Recruiter",
+        initials: name.substring(0, 2).toUpperCase(),
+      };
+    }
+  }
 
   const brand = role === "admin" ? {
     name: "Hirelytics Admin",
     initials: "HA",
     color: "#111827", // dark slate for admin
   } : role === "company" ? {
-    name: companyProfile.name,
-    initials: companyProfile.initials,
-    color: companyProfile.color,
+    name: user?.company_name || "Company",
+    initials: (user?.company_name || "CO").substring(0, 2).toUpperCase(),
+    color: "#4F46E5",
   } : undefined;
 
   return (
@@ -328,9 +342,11 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                   </p>
                 </div>
                 {role === "student" ? (
-                  <LogOut className="size-3.5 text-sidebar-foreground/40 hover:text-rose-400 shrink-0" />
+                  <button onClick={logout} className="text-sidebar-foreground/40 hover:text-rose-400 shrink-0 outline-none">
+                    <LogOut className="size-3.5" />
+                  </button>
                 ) : (
-                  <button className="text-sidebar-foreground/40 hover:text-sidebar-foreground/80 transition-colors">
+                  <button onClick={logout} className="text-sidebar-foreground/40 hover:text-sidebar-foreground/80 transition-colors outline-none">
                     <LogOut className="size-3.5" />
                   </button>
                 )}

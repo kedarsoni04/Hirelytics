@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Send,
@@ -8,25 +10,49 @@ import {
   TrendingUp,
   TrendingDown,
   Sparkles,
-  ArrowRight,
   MapPin,
   Clock,
   CheckCircle2,
   Eye,
   ChevronRight,
+  Briefcase,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  studentProfile,
   studentStats,
-  recommendedDrives,
   recentActivity,
 } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
 
-export const metadata: Metadata = {
-  title: "Dashboard",
+type Drive = {
+  id: string;
+  company_id: string;
+  title: string;
+  description: string | null;
+  package: string | null;
+  location: string | null;
+  min_cgpa: number | null;
+  eligible_branches: string[];
+  deadline: string | null;
+  status: string;
 };
+
+const PALETTE = [
+  "#4F46E5", "#0EA5E9", "#10B981", "#F59E0B", "#EF4444",
+  "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16", "#F97316",
+];
+
+function driveColor(drive: Drive) {
+  return PALETTE[drive.company_id.charCodeAt(0) % PALETTE.length];
+}
+
+function formatDeadline(iso: string | null) {
+  if (!iso) return "Open";
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,7 +94,30 @@ const statusStyles: Record<string, string> = {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const completion = studentProfile.profileCompletion;
+  const { user, loading } = useAuth();
+  const completion = 85; // Placeholder
+
+  const [drives, setDrives] = useState<Drive[]>([]);
+  const [drivesLoading, setDrivesLoading] = useState(true);
+
+  useEffect(() => {
+    api.getDrives()
+      .then((data) => setDrives(data.slice(0, 3)))
+      .catch(() => {})
+      .finally(() => setDrivesLoading(false));
+  }, []);
+
+  if (loading || !user) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto flex justify-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  const firstName = user.full_name ? user.full_name.split(" ")[0] : "Student";
+  const branch = user.branch || "Unknown Branch";
+  const college = user.college || "Unknown College";
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
@@ -80,10 +129,10 @@ export default function DashboardPage() {
             Good morning 👋
           </p>
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome back, {studentProfile.name.split(" ")[0]}
+            Welcome back, {firstName}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {studentProfile.branch} · {studentProfile.college} · Class of {studentProfile.graduationYear}
+            {branch} · {college}
           </p>
 
           {/* Profile completion */}
@@ -170,17 +219,30 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-3">
-            {recommendedDrives.map((drive) => (
+            {drivesLoading && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="size-6 animate-spin text-[#4F46E5]" />
+              </div>
+            )}
+            {!drivesLoading && drives.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                <div className="size-12 rounded-2xl bg-[#EEF2FF] flex items-center justify-center">
+                  <Briefcase className="size-6 text-[#4F46E5]" />
+                </div>
+                <p className="text-sm text-muted-foreground">No live drives right now. Check back soon!</p>
+              </div>
+            )}
+            {!drivesLoading && drives.map((drive) => (
               <Link key={drive.id} href={`/drives/${drive.id}`}>
                 <Card className="card-shadow hover:card-shadow-hover transition-all duration-200 border-border/60 cursor-pointer group">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      {/* Company logo */}
+                      {/* Company logo placeholder */}
                       <div
                         className="size-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0"
-                        style={{ backgroundColor: drive.companyColor }}
+                        style={{ backgroundColor: driveColor(drive) }}
                       >
-                        {drive.companyInitials}
+                        {(drive.title.substring(0, 2) || "??").toUpperCase()}
                       </div>
 
                       {/* Details */}
@@ -188,50 +250,45 @@ export default function DashboardPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate group-hover:text-[#4F46E5] transition-colors">
-                              {drive.role}
+                              {drive.title}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {drive.company}
-                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Campus Drive</p>
                           </div>
-                          {/* AI Match badge */}
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-[#EDE9FE] text-[#5B21B6] shrink-0">
-                            <Sparkles className="size-3" />
-                            {drive.aiMatch}% match
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#D1FAE5] text-[#065F46] shrink-0">
+                            <span className="size-1.5 rounded-full bg-[#10B981] animate-pulse" />
+                            Live
                           </span>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <MapPin className="size-3" />
-                            {drive.location}
-                          </span>
-                          <span className="text-xs font-semibold text-foreground">{drive.package}</span>
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs tracking-tight font-medium ${
-                              statusStyles[drive.status]
-                            }`}
-                          >
-                            <span className="size-1.5 rounded-full inline-block"
-                              style={{ backgroundColor: drive.status === "live" ? "#10B981" : "#F59E0B" }}
-                            />
-                            {drive.status === "live" ? "Live" : "Upcoming"}
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-xs tracking-tight text-muted-foreground">
-                            <Clock className="size-3" />
-                            Closes {drive.deadline}
-                          </span>
+                          {drive.location && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <MapPin className="size-3" />
+                              {drive.location}
+                            </span>
+                          )}
+                          {drive.package && (
+                            <span className="text-xs font-semibold text-foreground">{drive.package}</span>
+                          )}
+                          {drive.deadline && (
+                            <span className="inline-flex items-center gap-1 text-xs tracking-tight text-muted-foreground">
+                              <Clock className="size-3" />
+                              Closes {formatDeadline(drive.deadline)}
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex flex-wrap gap-1.5 mt-2">
-                          {drive.eligibility.branches.slice(0, 3).map((b) => (
+                          {drive.eligible_branches.slice(0, 3).map((b) => (
                             <span key={b} className="px-1.5 py-0.5 bg-accent text-accent-foreground rounded text-xs tracking-tight">
                               {b}
                             </span>
                           ))}
-                          <span className="px-1.5 py-0.5 bg-accent text-accent-foreground rounded text-xs tracking-tight">
-                            CGPA ≥ {drive.eligibility.cgpa}
-                          </span>
+                          {drive.min_cgpa !== null && drive.min_cgpa !== undefined && (
+                            <span className="px-1.5 py-0.5 bg-accent text-accent-foreground rounded text-xs tracking-tight">
+                              CGPA ≥ {drive.min_cgpa}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

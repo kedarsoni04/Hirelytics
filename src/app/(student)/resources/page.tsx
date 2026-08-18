@@ -61,7 +61,7 @@ export default function StudentResourcesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/interview/int-001">
+          <Link href="/applications">
             <Button className="brand-gradient text-white font-semibold gap-2">
               <Sparkles className="size-4" /> AI Mock Interview
             </Button>

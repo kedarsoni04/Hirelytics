@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -111,6 +112,7 @@ export default function ManageCompaniesPage() {
             <DropdownMenuItem onClick={() => setSelectedCompany(c)} className="text-xs cursor-pointer">
               <Eye className="size-3.5 mr-2" /> View Details
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             {c.status !== "Verified" && (
               <DropdownMenuItem onClick={() => handleVerify(c.id)} className="text-xs text-emerald-600 focus:text-emerald-600 cursor-pointer">
                 <ShieldCheck className="size-3.5 mr-2" /> Verify Account
