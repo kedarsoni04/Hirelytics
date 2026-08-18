@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Search, Sparkles, Bell, ChevronDown, User, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,32 +21,48 @@ interface TopNavbarProps {
   title?: string;
 }
 
+const adminPageTitles: Record<string, string> = {
+  "/admin/dashboard": "Admin Dashboard",
+  "/admin/companies": "Manage Companies",
+  "/admin/students": "Manage Students",
+  "/admin/analytics": "Platform Analytics",
+  "/admin/settings": "Settings & Logs",
+};
+
 export default function TopNavbar({ role, title }: TopNavbarProps) {
-  const profile = role === "admin" ? {
-    name: adminProfile.name,
-    initials: adminProfile.initials,
-    email: adminProfile.email,
-  } : role === "student" ? {
-    name: studentProfile.name,
-    initials: studentProfile.initials,
-    email: studentProfile.email,
-  } : {
-    name: companyProfile.recruiterName,
-    initials: companyProfile.recruiterInitials,
-    email: "recruiter@google.com",
-  };
+  const pathname = usePathname();
+
+  const profile =
+    role === "admin"
+      ? {
+          name: adminProfile.name,
+          initials: adminProfile.initials,
+          email: adminProfile.email,
+        }
+      : role === "student"
+      ? {
+          name: studentProfile.name,
+          initials: studentProfile.initials,
+          email: studentProfile.email,
+        }
+      : {
+          name: companyProfile.recruiterName,
+          initials: companyProfile.recruiterInitials,
+          email: "recruiter@google.com",
+        };
+
+  const displayTitle = title || (role === "admin" ? adminPageTitles[pathname] || "Admin Portal" : undefined);
 
   return (
     <header className="h-14 bg-white border-b border-border flex items-center px-5 gap-4 sticky top-0 z-20 shrink-0">
-      
-      {/* Student: Page Title */}
-      {role === "student" && title && (
+      {/* Student & Admin: Page Title */}
+      {(role === "student" || role === "admin") && displayTitle && (
         <div className="hidden md:block">
-          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-sm font-semibold text-foreground">{displayTitle}</p>
         </div>
       )}
 
-      {/* Company: Left-aligned Search (Takes up flex space) */}
+      {/* Company: Left-aligned Search */}
       {role === "company" && (
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
@@ -58,7 +75,7 @@ export default function TopNavbar({ role, title }: TopNavbarProps) {
 
       <div className="flex-1" />
 
-      {/* Student: Center-aligned search (Optional based on layout) */}
+      {/* Student: Center-aligned search */}
       {role === "student" && (
         <div className="hidden md:flex relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
@@ -74,78 +91,113 @@ export default function TopNavbar({ role, title }: TopNavbarProps) {
 
       {/* Actions */}
       <div className="flex items-center gap-3 shrink-0">
-        
         {/* AI Tools */}
-        {role === "admin" ? null : role === "student" ? (
-          <Link href="/ai-prep">
+        {role === "student" ? (
+          <Link href="/interview/int-001">
             <button className="hidden md:inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium text-white ai-gradient ai-glow hover:opacity-90 transition-opacity">
               <Sparkles className="size-3.5" />
               AI Tools
             </button>
           </Link>
-        ) : (
-          <Button size="sm" variant="outline" className="gap-2 text-xs h-8 text-[#5B21B6] border-violet-200 bg-[#EDE9FE] hover:bg-[#DDD6FE] hover:text-[#4C1D95]">
-            <Sparkles className="size-3.5" />
-            AI Tools
-          </Button>
-        )}
+        ) : role === "company" ? (
+          <Link href="/company/pipeline">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 text-xs h-8 text-[#5B21B6] border-violet-200 bg-[#EDE9FE] hover:bg-[#DDD6FE] hover:text-[#4C1D95]"
+            >
+              <Sparkles className="size-3.5" />
+              AI Tools
+            </Button>
+          </Link>
+        ) : null}
 
         {/* Notifications */}
-        {role === "student" ? (
-          <Button variant="ghost" size="icon" className="size-8 relative">
-            <Bell className="size-4" />
-            <span className="absolute top-1 right-1 size-2 rounded-full bg-rose-500 border-2 border-white" />
+        <Link
+          href={
+            role === "student"
+              ? "/notifications"
+              : role === "company"
+              ? "/company/notifications"
+              : "/admin/dashboard"
+          }
+        >
+          <Button variant="ghost" size="icon" className="size-8 relative" title="Notifications">
+            <Bell className="size-4 text-muted-foreground" />
+            <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-rose-500 border-2 border-white" />
           </Button>
-        ) : (
-          <button className="relative p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
-            <Bell className="size-4" />
-            <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-[#F43F5E]" />
-          </button>
-        )}
+        </Link>
 
-        {/* User Profile */}
-        {role === "student" ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 h-8 pl-1 pr-2 rounded-lg hover:bg-accent transition-colors group cursor-pointer">
-              <Avatar className="size-6">
-                <AvatarFallback className="text-xs tracking-tight font-bold brand-gradient text-white">
-                  {profile.initials}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-xs font-medium text-foreground hidden sm:block">{profile.name.split(" ")[0]}</span>
-              <ChevronDown className="size-3.5 text-muted-foreground" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                {profile.email}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-xs gap-2">
-                <User className="size-3.5" /> My Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-xs gap-2">
-                <Settings className="size-3.5" /> Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-xs gap-2 text-rose-500 focus:text-rose-500">
-                <LogOut className="size-3.5" /> Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : role === "admin" ? (
-          <Avatar className="size-7">
-            <AvatarFallback className="text-xs tracking-tight font-bold bg-admin-slate text-white">
-              {profile.initials}
-            </AvatarFallback>
-          </Avatar>
-        ) : (
-          <Avatar className="size-7">
-            <AvatarFallback className="text-xs tracking-tight font-bold brand-gradient text-white">
-              {profile.initials}
-            </AvatarFallback>
-          </Avatar>
-        )}
-
+        {/* Standardized User Profile Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex items-center gap-2 h-8 pl-1 pr-2 rounded-lg hover:bg-accent transition-colors group cursor-pointer outline-none">
+            <Avatar className="size-6">
+              <AvatarFallback
+                className={`text-xs tracking-tight font-bold ${
+                  role === "admin" ? "bg-admin-slate text-white" : "brand-gradient text-white"
+                }`}
+              >
+                {profile.initials}
+              </AvatarFallback>
+            </Avatar>
+            <span className="text-xs font-medium text-foreground hidden sm:block">
+              {profile.name.split(" ")[0]}
+            </span>
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground truncate">
+              {profile.email}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {role === "student" && (
+              <>
+                <Link href="/profile">
+                  <DropdownMenuItem className="text-xs gap-2 cursor-pointer">
+                    <User className="size-3.5" /> My Profile
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/settings">
+                  <DropdownMenuItem className="text-xs gap-2 cursor-pointer">
+                    <Settings className="size-3.5" /> Settings
+                  </DropdownMenuItem>
+                </Link>
+              </>
+            )}
+            {role === "company" && (
+              <>
+                <Link href="/company/settings">
+                  <DropdownMenuItem className="text-xs gap-2 cursor-pointer">
+                    <User className="size-3.5" /> Company Profile
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/company/settings">
+                  <DropdownMenuItem className="text-xs gap-2 cursor-pointer">
+                    <Settings className="size-3.5" /> Settings
+                  </DropdownMenuItem>
+                </Link>
+              </>
+            )}
+            {role === "admin" && (
+              <>
+                <Link href="/admin/settings">
+                  <DropdownMenuItem className="text-xs gap-2 cursor-pointer">
+                    <User className="size-3.5" /> Admin Team
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/admin/settings">
+                  <DropdownMenuItem className="text-xs gap-2 cursor-pointer">
+                    <Settings className="size-3.5" /> System Settings
+                  </DropdownMenuItem>
+                </Link>
+              </>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-xs gap-2 text-rose-500 focus:text-rose-500 cursor-pointer">
+              <LogOut className="size-3.5" /> Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

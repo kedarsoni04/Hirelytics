@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Settings2, Shield, Activity, Save } from "lucide-react";
+import { Settings2, Shield, Activity, Save, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, Column } from "@/components/ui/DataTable";
@@ -11,6 +11,20 @@ export default function AdminSettingsPage() {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [registrationsOpen, setRegistrationsOpen] = useState(true);
   const [aiEnabled, setAiEnabled] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleSaveConfig = () => {
+    showToast("Platform configuration updated successfully.");
+  };
+
+  const handleInviteAdmin = () => {
+    showToast("Admin invitation link generated & copied to clipboard.");
+  };
 
   const logColumns: Column<typeof platformLogs[0]>[] = [
     { header: "Timestamp", accessorKey: "timestamp" },
@@ -107,7 +121,7 @@ export default function AdminSettingsPage() {
               </button>
             </div>
 
-            <Button className="w-full brand-gradient text-white font-semibold gap-2">
+            <Button onClick={handleSaveConfig} className="w-full brand-gradient text-white font-semibold gap-2">
               <Save className="size-4" /> Save Configuration
             </Button>
           </CardContent>
@@ -129,7 +143,7 @@ export default function AdminSettingsPage() {
                 </div>
                 <div className="text-right">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
-                    admin.role === "Super Admin" ? "bg-admin-slate text-white" : "bg-muted text-muted-foreground"
+                    admin.role === "Super Admin" ? "bg-[#EEF2FF] text-[#4F46E5]" : "bg-muted text-muted-foreground"
                   }`}>
                     {admin.role}
                   </span>
@@ -137,7 +151,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
             ))}
-            <Button variant="outline" className="w-full text-xs border-dashed">
+            <Button onClick={handleInviteAdmin} variant="outline" className="w-full text-xs border-dashed">
               + Invite Admin User
             </Button>
           </CardContent>
@@ -157,6 +171,15 @@ export default function AdminSettingsPage() {
         />
       </div>
 
+      {/* ── Toast Notification ── */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl bg-slate-900 px-4 py-3 text-xs font-semibold text-white shadow-xl animate-in slide-in-from-bottom-5">
+          <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+          <span>{toast}</span>
+        </div>
+      )}
+
     </div>
   );
 }
+

@@ -57,7 +57,7 @@ const studentNavItems: NavGroup[] = [
   {
     group: "AI Tools",
     items: [
-      { icon: Sparkles, label: "AI Interview Prep", href: "/ai-prep", badge: "New", ai: true },
+      { icon: Sparkles, label: "AI Interview Prep", href: "/interview/int-001", badge: "New", ai: true },
       { icon: BookOpen, label: "Resources", href: "/resources" },
     ],
   },
@@ -185,7 +185,7 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                     {brand?.name}
                   </p>
                   <p className="text-xs tracking-tight text-sidebar-foreground/50 truncate">
-                    Recruiter Portal
+                    {role === "admin" ? "Admin Portal" : "Recruiter Portal"}
                   </p>
                 </div>
               )}

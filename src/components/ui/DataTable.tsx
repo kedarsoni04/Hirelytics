@@ -11,12 +11,13 @@ interface DataTableProps<T> {
   data: T[];
   columns: Column<T>[];
   keyExtractor: (item: T) => string;
+  minWidth?: string;
 }
 
-export function DataTable<T>({ data, columns, keyExtractor }: DataTableProps<T>) {
+export function DataTable<T>({ data, columns, keyExtractor, minWidth = "min-w-[720px]" }: DataTableProps<T>) {
   return (
     <div className="w-full overflow-x-auto rounded-xl border border-border/60 bg-white shadow-sm">
-      <table className="w-full text-left text-sm text-foreground border-collapse min-w-[600px]">
+      <table className={`w-full text-left text-sm text-foreground border-collapse ${minWidth}`}>
         <thead className="bg-muted/50 text-xs tracking-tight uppercase text-muted-foreground">
           <tr>
             {columns.map((col, i) => (

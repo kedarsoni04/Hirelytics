@@ -15,6 +15,13 @@ const statIcons: Record<string, React.ElementType> = {
   award: Award,
 };
 
+const statStyles: Record<string, { bg: string; text: string }> = {
+  building: { bg: "bg-[#EEF2FF]", text: "text-[#4F46E5]" },
+  users: { bg: "bg-[#D1FAE5]", text: "text-[#065F46]" },
+  briefcase: { bg: "bg-[#EDE9FE]", text: "text-[#7C3AED]" },
+  award: { bg: "bg-amber-50", text: "text-amber-600" },
+};
+
 export default function AdminDashboardPage() {
   const [pendingCompanies, setPendingCompanies] = useState(adminCompanies.filter(c => c.status === "Pending"));
 
@@ -43,12 +50,13 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {platformStats.map((stat) => {
           const Icon = statIcons[stat.icon] || Briefcase;
+          const style = statStyles[stat.icon] || { bg: "bg-[#EEF2FF]", text: "text-[#4F46E5]" };
           return (
             <Card key={stat.label} className="card-shadow border-border/60">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="size-9 rounded-xl flex items-center justify-center bg-admin-slate">
-                    <Icon className="size-4 text-white" />
+                  <div className={`size-9 rounded-xl flex items-center justify-center ${style.bg} ${style.text}`}>
+                    <Icon className="size-4" />
                   </div>
                   {stat.trendUp !== null && (
                     <span className={`text-xs tracking-tight font-semibold px-1.5 py-0.5 rounded-full ${stat.trendUp ? "bg-[#D1FAE5] text-[#065F46]" : "bg-muted text-muted-foreground"}`}>
