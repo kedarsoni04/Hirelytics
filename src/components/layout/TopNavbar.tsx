@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, Sparkles, Bell, ChevronDown, User, Settings, LogOut } from "lucide-react";
@@ -15,8 +16,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { studentProfile, companyProfile, adminProfile } from "@/lib/mock-data";
+
 import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
 
 interface TopNavbarProps {
   role: "student" | "company" | "admin";
@@ -34,6 +36,21 @@ const adminPageTitles: Record<string, string> = {
 export default function TopNavbar({ role, title }: TopNavbarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user || role === "admin") return;
+    
+    const fetchUnread = () => {
+      api.getUnreadNotificationCount()
+        .then((res: any) => setUnreadCount(res.count))
+        .catch(() => {});
+    };
+
+    fetchUnread();
+    window.addEventListener("notifications-updated", fetchUnread);
+    return () => window.removeEventListener("notifications-updated", fetchUnread);
+  }, [user, role]);
 
   let profile = { name: "Guest", initials: "G", email: "" };
   if (user) {
@@ -121,7 +138,11 @@ export default function TopNavbar({ role, title }: TopNavbarProps) {
         >
           <Button variant="ghost" size="icon" className="size-8 relative" title="Notifications">
             <Bell className="size-4 text-muted-foreground" />
-            <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-rose-500 border-2 border-white" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white border-2 border-white leading-none">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </Button>
         </Link>
 

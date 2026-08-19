@@ -235,12 +235,16 @@ export default function CandidateScorecardPage() {
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-muted text-muted-foreground text-xs font-semibold">
                     CGPA: {student.cgpa !== null && student.cgpa !== undefined ? `${student.cgpa} / 10` : "N/A"}
                   </span>
-                  {student.resume_url && (
+                  {student.resume_url ? (
                     <a href={student.resume_url} target="_blank" rel="noreferrer">
-                      <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5">
-                        <Download className="size-3" /> Resume
+                      <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                        <Download className="size-3" /> Download Resume
                       </Button>
                     </a>
+                  ) : (
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 opacity-40 cursor-not-allowed" disabled>
+                      <Download className="size-3" /> No Resume Uploaded
+                    </Button>
                   )}
                 </div>
               </div>

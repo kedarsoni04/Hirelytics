@@ -1,21 +1,139 @@
 "use client";
 
-import { useState } from "react";
-import { Download, Save, CheckCircle2, User, GraduationCap, Briefcase, Code, Award, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, Save, CheckCircle2, User, GraduationCap, Briefcase, Code, Award, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
-import ResumePreview from "@/components/resume/ResumePreview";
-import { resumeData } from "@/lib/mock-data";
+import ResumePreview, { ResumeDataProps } from "@/components/resume/ResumePreview";
+import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
 
 export default function ResumeBuilderPage() {
+  const { user, refreshUser } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
-    setIsSaving(true);
-    setTimeout(() => setIsSaving(false), 1000);
+  const [name, setName] = useState(user?.full_name || "");
+  const [title, setTitle] = useState("Software Engineer");
+  const [email, setEmail] = useState(user?.email || "");
+  const [phone, setPhone] = useState("+91 98765 43210");
+  const [location, setLocation] = useState("India");
+  const [linkedin, setLinkedin] = useState(user?.linkedin_url || "");
+  const [github, setGithub] = useState(user?.github_url || "");
+  const [summary, setSummary] = useState(
+    "Detail-oriented software engineer with a strong foundation in algorithmic problem-solving and modern web development."
+  );
+
+  const [institution, setInstitution] = useState(user?.college || "");
+  const [degree, setDegree] = useState(user?.branch ? `B.Tech in ${user.branch}` : "");
+  const [period, setPeriod] = useState("2022 – 2026");
+  const [score, setScore] = useState(user?.cgpa ? `CGPA: ${user.cgpa} / 10` : "");
+
+  const [skillsStr, setSkillsStr] = useState(user?.skills ? user.skills.join(", ") : "");
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  if (user && !isInitialized) {
+    if (user.full_name) setName(user.full_name);
+    if (user.email) setEmail(user.email);
+    if (user.college) setInstitution(user.college);
+    if (user.branch) setDegree(`B.Tech in ${user.branch}`);
+    if (user.cgpa) setScore(`CGPA: ${user.cgpa} / 10`);
+    if (user.linkedin_url) setLinkedin(user.linkedin_url);
+    if (user.github_url) setGithub(user.github_url);
+    if (user.skills && user.skills.length > 0) {
+      setSkillsStr(user.skills.join(", "));
+    }
+    setIsInitialized(true);
+  }
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      const skillsArray = skillsStr
+        ? skillsStr.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined;
+
+      await api.updateProfile({
+        full_name: name,
+        college: institution,
+        branch: degree.replace(/^B\.Tech in\s*/i, ""),
+        linkedin_url: linkedin,
+        github_url: github,
+        skills: skillsArray,
+      });
+
+      await refreshUser();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error("Failed to save resume profile:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    window.print();
+  };
+
+  const parsedSkills = skillsStr
+    ? skillsStr.split(",").map((s) => s.trim()).filter(Boolean)
+    : ["Python", "TypeScript", "React", "Next.js", "FastAPI", "PostgreSQL", "Docker", "Git"];
+
+  const resumeState: ResumeDataProps = {
+    personal: {
+      name: name || "Your Name",
+      title: title || "Software Engineer",
+      email: email || "your.email@university.edu",
+      phone,
+      location,
+      linkedin: linkedin || "linkedin.com/in/profile",
+      github: github || "github.com/profile",
+      summary,
+    },
+    education: [
+      {
+        institution: institution || "University / College",
+        degree: degree || "B.Tech Computer Science",
+        period,
+        score: score || "CGPA: 8.5 / 10",
+      },
+    ],
+    experience: [
+      {
+        role: "Software Engineering Intern",
+        company: "Tech Enterprise",
+        location: "Bangalore, India",
+        period: "May 2025 – Jul 2025",
+        bullets: [
+          "Developed high-throughput API endpoints with async data pipelines.",
+          "Implemented clean and responsive UI components with comprehensive testing.",
+        ],
+      },
+    ],
+    projects: [
+      {
+        name: "Hirelytics Recruitment Platform",
+        tech: "Next.js, FastAPI, PostgreSQL",
+        period: "2026",
+        bullets: [
+          "Implemented AI-assisted candidate screening and video interview evaluation pipelines.",
+          "Constructed responsive dashboards for students and recruiter teams.",
+        ],
+      },
+    ],
+    skills: {
+      languages: parsedSkills.slice(0, 4),
+      frameworks: parsedSkills.slice(4, 7),
+      tools: parsedSkills.slice(7),
+    },
+    achievements: [
+      "Consistent academic performer with verified course certifications.",
+      "Solved 300+ problem solving challenges across competitive programming platforms.",
+    ],
   };
 
   return (
@@ -30,12 +148,18 @@ export default function ResumeBuilderPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={handleSave} className="gap-2 text-xs">
-            {isSaving ? <CheckCircle2 className="size-3.5 text-emerald-500" /> : <Save className="size-3.5" />}
-            {isSaving ? "Saved" : "Save Draft"}
+          <Button variant="outline" size="sm" onClick={handleSave} disabled={isSaving} className="gap-2 text-xs">
+            {isSaving ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : saved ? (
+              <CheckCircle2 className="size-3.5 text-emerald-500" />
+            ) : (
+              <Save className="size-3.5" />
+            )}
+            {saved ? "Saved" : "Save to Profile"}
           </Button>
-          <Button size="sm" className="brand-gradient text-white hover:opacity-90 transition-opacity gap-2 text-xs">
-            <Download className="size-3.5" /> Download PDF
+          <Button onClick={handleDownloadPDF} size="sm" className="brand-gradient text-white hover:opacity-90 transition-opacity gap-2 text-xs">
+            <Download className="size-3.5" /> Download / Print PDF
           </Button>
         </div>
       </div>
@@ -51,12 +175,12 @@ export default function ResumeBuilderPage() {
             <div>
               <p className="text-sm font-semibold text-[#3730A3]">AI Resume Optimization is Active</p>
               <p className="text-xs text-[#4F46E5] mt-1 leading-relaxed">
-                As you type, Hirelytics AI will suggest high-impact action verbs and quantify your achievements to boost your ATS score.
+                As you type, Hirelytics updates your live ATS preview to ensure maximum keyword matching with recruiter drives.
               </p>
             </div>
           </div>
 
-          <Accordion defaultValue={["personal"]} className="space-y-4">
+          <Accordion defaultValue={["personal", "education", "skills"]} className="space-y-4">
             
             {/* Personal Info */}
             <AccordionItem value="personal" className="border-none bg-white rounded-xl card-shadow overflow-hidden">
@@ -72,31 +196,66 @@ export default function ResumeBuilderPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name" className="text-xs">Full Name</Label>
-                    <Input id="name" defaultValue={resumeData.personal.name} className="h-9 text-xs" />
+                    <Input
+                      id="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="h-9 text-xs"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="title" className="text-xs">Professional Title</Label>
-                    <Input id="title" defaultValue={resumeData.personal.title} className="h-9 text-xs" />
+                    <Input
+                      id="title"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="h-9 text-xs"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="email" className="text-xs">Email Address</Label>
-                    <Input id="email" defaultValue={resumeData.personal.email} className="h-9 text-xs" />
+                    <Input
+                      id="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="h-9 text-xs"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone" className="text-xs">Phone Number</Label>
-                    <Input id="phone" defaultValue={resumeData.personal.phone} className="h-9 text-xs" />
+                    <Input
+                      id="phone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="h-9 text-xs"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="location" className="text-xs">Location</Label>
-                    <Input id="location" defaultValue={resumeData.personal.location} className="h-9 text-xs" />
+                    <Input
+                      id="location"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      className="h-9 text-xs"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="linkedin" className="text-xs">LinkedIn URL</Label>
-                    <Input id="linkedin" defaultValue={resumeData.personal.linkedin} className="h-9 text-xs" />
+                    <Input
+                      id="linkedin"
+                      value={linkedin}
+                      onChange={(e) => setLinkedin(e.target.value)}
+                      className="h-9 text-xs"
+                    />
                   </div>
                   <div className="col-span-2 space-y-2">
                     <Label htmlFor="summary" className="text-xs">Professional Summary</Label>
-                    <Textarea id="summary" defaultValue={resumeData.personal.summary} className="min-h-[100px] text-xs resize-none" />
+                    <Textarea
+                      id="summary"
+                      value={summary}
+                      onChange={(e) => setSummary(e.target.value)}
+                      className="min-h-[100px] text-xs resize-none"
+                    />
                   </div>
                 </div>
               </AccordionContent>
@@ -112,41 +271,41 @@ export default function ResumeBuilderPage() {
                   <span className="font-semibold text-sm">Education</span>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-6 py-5">
-                <p className="text-xs text-muted-foreground mb-4">Add your degrees and educational background.</p>
-                <Button variant="outline" size="sm" className="w-full border-dashed text-xs">+ Add Education</Button>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* Experience */}
-            <AccordionItem value="experience" className="border-none bg-white rounded-xl card-shadow overflow-hidden">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-open:border-b border-border">
-                <div className="flex items-center gap-3">
-                  <div className="size-8 rounded-lg bg-amber-50 flex items-center justify-center">
-                    <Briefcase className="size-4 text-amber-600" />
+              <AccordionContent className="px-6 py-5 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Institution</Label>
+                    <Input
+                      value={institution}
+                      onChange={(e) => setInstitution(e.target.value)}
+                      className="h-9 text-xs"
+                    />
                   </div>
-                  <span className="font-semibold text-sm">Experience</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-6 py-5">
-                <p className="text-xs text-muted-foreground mb-4">List your internships and work experience.</p>
-                <Button variant="outline" size="sm" className="w-full border-dashed text-xs">+ Add Experience</Button>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* Projects */}
-            <AccordionItem value="projects" className="border-none bg-white rounded-xl card-shadow overflow-hidden">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-accent/50 data-open:border-b border-border">
-                <div className="flex items-center gap-3">
-                  <div className="size-8 rounded-lg bg-rose-50 flex items-center justify-center">
-                    <Code className="size-4 text-rose-600" />
+                  <div className="space-y-2">
+                    <Label className="text-xs">Degree / Branch</Label>
+                    <Input
+                      value={degree}
+                      onChange={(e) => setDegree(e.target.value)}
+                      className="h-9 text-xs"
+                    />
                   </div>
-                  <span className="font-semibold text-sm">Projects</span>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Timeline</Label>
+                    <Input
+                      value={period}
+                      onChange={(e) => setPeriod(e.target.value)}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Score / CGPA</Label>
+                    <Input
+                      value={score}
+                      onChange={(e) => setScore(e.target.value)}
+                      className="h-9 text-xs"
+                    />
+                  </div>
                 </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-6 py-5">
-                <p className="text-xs text-muted-foreground mb-4">Showcase your technical projects.</p>
-                <Button variant="outline" size="sm" className="w-full border-dashed text-xs">+ Add Project</Button>
               </AccordionContent>
             </AccordionItem>
 
@@ -157,12 +316,17 @@ export default function ResumeBuilderPage() {
                   <div className="size-8 rounded-lg bg-violet-50 flex items-center justify-center">
                     <Award className="size-4 text-violet-600" />
                   </div>
-                  <span className="font-semibold text-sm">Skills & Achievements</span>
+                  <span className="font-semibold text-sm">Skills & Keywords</span>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-6 py-5">
-                <p className="text-xs text-muted-foreground mb-4">List your technical skills and notable achievements.</p>
-                <Button variant="outline" size="sm" className="w-full border-dashed text-xs">+ Edit Skills</Button>
+              <AccordionContent className="px-6 py-5 space-y-3">
+                <Label className="text-xs">Skills (Comma-separated)</Label>
+                <Input
+                  value={skillsStr}
+                  onChange={(e) => setSkillsStr(e.target.value)}
+                  placeholder="e.g. Python, TypeScript, React, Docker, FastAPI"
+                  className="h-9 text-xs"
+                />
               </AccordionContent>
             </AccordionItem>
 
@@ -175,9 +339,8 @@ export default function ResumeBuilderPage() {
             <span className="text-xs tracking-tight font-semibold text-slate-500 uppercase tracking-widest">Live Preview</span>
           </div>
           <div className="flex-1 overflow-y-auto p-8 flex justify-center bg-slate-100/50">
-            {/* A4 aspect ratio container for preview */}
             <div className="w-full max-w-[800px] h-fit shrink-0">
-              <ResumePreview />
+              <ResumePreview data={resumeState} />
             </div>
           </div>
         </div>

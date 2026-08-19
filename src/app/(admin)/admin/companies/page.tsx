@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Search, MoreHorizontal, ShieldCheck, Ban, Eye, Building2, CheckCircle2, X, Download, Mail, Calendar, Briefcase } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search, MoreHorizontal, ShieldCheck, Ban, Eye, CheckCircle2, X, Download, Mail, Calendar, Briefcase, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DataTable, Column } from "@/components/ui/DataTable";
-import { adminCompanies } from "@/lib/mock-data";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,11 +12,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { api } from "@/lib/api";
+
+interface CompanyItem {
+  id: string;
+  name: string;
+  industry: string;
+  status: string;
+  activeDrives: number;
+  totalDrives: number;
+  joined: string;
+  logo: string;
+  email: string;
+}
 
 export default function ManageCompaniesPage() {
   const [search, setSearch] = useState("");
-  const [companies, setCompanies] = useState(adminCompanies);
-  const [selectedCompany, setSelectedCompany] = useState<(typeof adminCompanies)[0] | null>(null);
+  const [companies, setCompanies] = useState<CompanyItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCompany, setSelectedCompany] = useState<CompanyItem | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -25,23 +38,57 @@ export default function ManageCompaniesPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleVerify = (id: string) => {
-    setCompanies((prev) => prev.map(c => c.id === id ? { ...c, status: "Verified" } : c));
-    if (selectedCompany?.id === id) {
-      setSelectedCompany(prev => prev ? { ...prev, status: "Verified" } : null);
+  const loadCompanies = async () => {
+    try {
+      const data = await api.getAdminCompanies();
+      setCompanies(data || []);
+    } catch (e) {
+      console.error("Failed to load companies:", e);
+    } finally {
+      setLoading(false);
     }
-    showToast("Company verified successfully.");
   };
 
-  const handleSuspend = (id: string) => {
-    setCompanies((prev) => prev.map(c => c.id === id ? { ...c, status: "Suspended" } : c));
-    if (selectedCompany?.id === id) {
-      setSelectedCompany(prev => prev ? { ...prev, status: "Suspended" } : null);
+  useEffect(() => {
+    loadCompanies();
+  }, []);
+
+  const handleVerify = async (id: string) => {
+    try {
+      await api.updateCompanyStatus(id, "verified");
+      setCompanies((prev) => prev.map(c => c.id === id ? { ...c, status: "Verified" } : c));
+      if (selectedCompany?.id === id) {
+        setSelectedCompany(prev => prev ? { ...prev, status: "Verified" } : null);
+      }
+      showToast("Company verified successfully.");
+    } catch (e) {
+      console.error("Failed to verify company:", e);
     }
-    showToast("Company suspended.");
+  };
+
+  const handleSuspend = async (id: string) => {
+    try {
+      await api.updateCompanyStatus(id, "suspended");
+      setCompanies((prev) => prev.map(c => c.id === id ? { ...c, status: "Suspended" } : c));
+      if (selectedCompany?.id === id) {
+        setSelectedCompany(prev => prev ? { ...prev, status: "Suspended" } : null);
+      }
+      showToast("Company suspended.");
+    } catch (e) {
+      console.error("Failed to suspend company:", e);
+    }
   };
 
   const handleExportCSV = () => {
+    if (companies.length === 0) return;
+    const headers = "ID,Name,Industry,Status,ActiveDrives,Joined,Email\n";
+    const rows = companies.map(c => `"${c.id}","${c.name}","${c.industry}","${c.status}","${c.activeDrives}","${c.joined}","${c.email}"`).join("\n");
+    const blob = new Blob([headers + rows], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `companies-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
     showToast("Exporting company directory as CSV...");
   };
 
@@ -70,7 +117,7 @@ export default function ManageCompaniesPage() {
     );
   };
 
-  const columns: Column<typeof adminCompanies[0]>[] = [
+  const columns: Column<CompanyItem>[] = [
     {
       header: "Company",
       cell: (c) => (
@@ -128,6 +175,14 @@ export default function ManageCompaniesPage() {
       ),
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -206,7 +261,7 @@ export default function ManageCompaniesPage() {
               <p className="font-semibold text-foreground">Recruiter Contact</p>
               <div className="flex items-center gap-2 text-muted-foreground p-2.5 rounded-lg bg-muted/30 border border-border/40">
                 <Mail className="size-3.5 text-muted-foreground shrink-0" />
-                <span className="truncate">recruiter@{selectedCompany.name.toLowerCase().replace(/\s+/g, "")}.com</span>
+                <span className="truncate">{selectedCompany.email || `recruiter@${selectedCompany.name.toLowerCase().replace(/\s+/g, "")}.com`}</span>
               </div>
             </div>
 
@@ -251,4 +306,3 @@ export default function ManageCompaniesPage() {
     </div>
   );
 }
-

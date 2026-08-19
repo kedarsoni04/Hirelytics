@@ -30,6 +30,8 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   if (options.body instanceof URLSearchParams) {
     delete headers['Content-Type'];
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  } else if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+    delete headers['Content-Type'];
   }
 
   if (token) {
@@ -74,6 +76,12 @@ export const api = {
   getMe: () => fetchAPI('/auth/me', { method: 'GET' }),
   updateProfile: (data: Record<string, any>) =>
     fetchAPI('/students/me', { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAccount: () => fetchAPI('/students/me', { method: 'DELETE' }),
+
+  // Companies
+  getCompanyProfile: () => fetchAPI('/companies/me', { method: 'GET' }),
+  updateCompanyProfile: (data: Record<string, any>) =>
+    fetchAPI('/companies/me', { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Drives
   createDrive: (data: any) => fetchAPI('/drives', { method: 'POST', body: JSON.stringify(data) }),
@@ -81,6 +89,7 @@ export const api = {
   getDrive: (id: string) => fetchAPI(`/drives/${id}`, { method: 'GET' }),
   updateDrive: (id: string, data: any) => fetchAPI(`/drives/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getMyCompanyDrives: () => fetchAPI('/drives/company/mine', { method: 'GET' }),
+  getCompanyAnalytics: () => fetchAPI('/drives/company/analytics', { method: 'GET' }),
 
   // Applications
   applyToDrive: (driveId: string) => fetchAPI('/applications', { method: 'POST', body: JSON.stringify({ drive_id: driveId }) }),
@@ -96,8 +105,37 @@ export const api = {
   // Interviews
   getApplicationInterview: (applicationId: string) => fetchAPI(`/interviews/application/${applicationId}`, { method: 'GET' }),
   submitInterview: (interviewId: string, data: any) => fetchAPI(`/interviews/${interviewId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
+  getCompanyScheduledInterviews: () => fetchAPI('/interviews/company/scheduled', { method: 'GET' }),
+  scheduleInterview: (data: { application_id: string; scheduled_at: string; notes?: string }) =>
+    fetchAPI('/interviews/schedule', { method: 'POST', body: JSON.stringify(data) }),
 
   // Scorecards
   getScorecard: (applicationId: string) => fetchAPI(`/scorecards/${applicationId}`, { method: 'GET' }),
   generateScorecard: (applicationId: string) => fetchAPI(`/scorecards/generate/${applicationId}`, { method: 'POST' }),
+
+  // Transcription
+  transcribeAudio: (formData: FormData) => fetchAPI('/interviews/transcribe', { method: 'POST', body: formData }),
+
+  // Resume upload
+  uploadResume: (formData: FormData) => fetchAPI('/students/me/resume', { method: 'POST', body: formData }),
+
+  // Student stats & activity
+  getMyStats: () => fetchAPI('/students/me/stats', { method: 'GET' }),
+  getMyActivity: () => fetchAPI('/students/me/activity', { method: 'GET' }),
+
+  // Notifications
+  getNotifications: () => fetchAPI('/notifications/mine', { method: 'GET' }),
+  markNotificationRead: (id: string) => fetchAPI(`/notifications/${id}/read`, { method: 'PATCH' }),
+  markAllNotificationsRead: () => fetchAPI('/notifications/read-all', { method: 'PATCH' }),
+  getUnreadNotificationCount: () => fetchAPI('/notifications/unread-count', { method: 'GET' }),
+
+  // Admin
+  getAdminCompanies: () => fetchAPI('/admin/companies', { method: 'GET' }),
+  updateCompanyStatus: (id: string, status: string) =>
+    fetchAPI(`/admin/companies/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  getAdminStudents: () => fetchAPI('/admin/students', { method: 'GET' }),
+  updateStudentStatus: (id: string, status: string) =>
+    fetchAPI(`/admin/students/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  getAdminDashboardStats: () => fetchAPI('/admin/dashboard/stats', { method: 'GET' }),
+  getAdminAnalytics: () => fetchAPI('/admin/analytics', { method: 'GET' }),
 };

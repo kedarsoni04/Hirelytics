@@ -16,6 +16,7 @@ type StudentProfile = {
   linkedin_url?: string;
   github_url?: string;
   portfolio_url?: string;
+  resume_url?: string;
 };
 
 type CompanyProfile = {
@@ -40,6 +41,7 @@ export type User = {
   linkedin_url?: string;
   github_url?: string;
   portfolio_url?: string;
+  resume_url?: string;
   // Company fields (hoisted from company_profile)
   company_name?: string;
   industry?: string;
@@ -80,6 +82,7 @@ function normaliseUser(raw: any): User {
     linkedin_url: raw.linkedin_url ?? sp.linkedin_url,
     github_url: raw.github_url ?? sp.github_url,
     portfolio_url: raw.portfolio_url ?? sp.portfolio_url,
+    resume_url: raw.resume_url ?? sp.resume_url,
     // Hoist company profile fields
     company_name: raw.company_name ?? cp.company_name,
     industry: raw.industry ?? cp.industry,
@@ -107,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       }
     } catch (error) {
-      console.error("Failed to fetch user", error);
+      console.warn("Auth check failed:", error instanceof Error ? error.message : "Invalid token");
       clearToken();
       setUser(null);
     } finally {
@@ -116,7 +119,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    fetchUser();
+    // Delay fetchUser by one microtask to avoid "synchronous setState in effect" warnings
+    Promise.resolve().then(() => fetchUser());
   }, []);
 
   useEffect(() => {
@@ -126,18 +130,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (route) => pathname?.startsWith(route)
     );
     const isCompanyRoute = pathname?.startsWith("/company");
+    const isAdminRoute = pathname?.startsWith("/admin");
     const isAuthRoute = pathname === "/login" || pathname === "/signup";
     const isPublicRoute = pathname === "/" || isAuthRoute || pathname === "/design-system";
 
     if (!user && !isPublicRoute) {
       router.push("/login");
     } else if (user) {
-      if (user.role === "student" && isCompanyRoute) {
+      if (user.role === "student" && (isCompanyRoute || isAdminRoute)) {
         router.push("/dashboard");
-      } else if (user.role === "company" && isStudentRoute) {
+      } else if (user.role === "company" && (isStudentRoute || isAdminRoute)) {
         router.push("/company/dashboard");
+      } else if (user.role === "admin" && (isStudentRoute || isCompanyRoute)) {
+        router.push("/admin/dashboard");
       } else if (isAuthRoute || pathname === "/") {
-        router.push(user.role === "student" ? "/dashboard" : "/company/dashboard");
+        router.push(
+          user.role === "student" 
+            ? "/dashboard" 
+            : user.role === "company" 
+            ? "/company/dashboard" 
+            : "/admin/dashboard"
+        );
       }
     }
   }, [user, loading, pathname, router]);

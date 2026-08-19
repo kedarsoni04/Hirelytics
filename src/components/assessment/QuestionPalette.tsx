@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { QuestionStatus } from "@/lib/mock-data";
+import type { QuestionStatus } from "@/lib/types";
 import { Flag } from "lucide-react";
 
 interface QuestionPaletteProps {

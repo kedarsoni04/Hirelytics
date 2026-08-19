@@ -32,11 +32,12 @@ def generate_scorecard_endpoint(
     if not interview or not interview.completed_at:
         raise HTTPException(status_code=400, detail="Cannot generate scorecard: Interview is missing or not completed")
 
-    # Generate mock AI data
+    # Generate real AI data
     scorecard_data = generate_scorecard(
         student=application.student,
         assessment_score=float(submission.score or 0.0),
-        interview_data=interview.sentiment_data or {}
+        interview_data=interview.sentiment_data or {},
+        drive=application.drive
     )
 
     # Check if exists

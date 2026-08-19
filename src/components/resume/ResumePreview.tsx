@@ -1,8 +1,99 @@
-import { resumeData } from "@/lib/mock-data";
 import { Globe, GitBranch, Mail, Phone, MapPin } from "lucide-react";
 
-export default function ResumePreview() {
-  const { personal, education, experience, skills, projects, achievements } = resumeData;
+export interface ResumeDataProps {
+  personal: {
+    name: string;
+    title: string;
+    email: string;
+    phone: string;
+    location: string;
+    linkedin: string;
+    github: string;
+    summary: string;
+  };
+  education: {
+    institution: string;
+    degree: string;
+    period: string;
+    score: string;
+  }[];
+  experience: {
+    role: string;
+    company: string;
+    location: string;
+    period: string;
+    bullets: string[];
+  }[];
+  projects: {
+    name: string;
+    tech: string;
+    period: string;
+    bullets: string[];
+  }[];
+  skills: {
+    languages: string[];
+    frameworks: string[];
+    tools: string[];
+  };
+  achievements: string[];
+}
+
+const defaultResumeData: ResumeDataProps = {
+  personal: {
+    name: "Student Candidate",
+    title: "Software Engineer",
+    email: "candidate@university.edu",
+    phone: "+91 98765 43210",
+    location: "India",
+    linkedin: "linkedin.com/in/candidate",
+    github: "github.com/candidate",
+    summary: "Aspiring software engineer with strong fundamentals in data structures, algorithms, and full-stack development.",
+  },
+  education: [
+    {
+      institution: "Institute of Technology",
+      degree: "B.Tech Computer Science",
+      period: "2022 – 2026",
+      score: "CGPA: 8.8 / 10",
+    },
+  ],
+  experience: [
+    {
+      role: "Software Engineering Intern",
+      company: "Tech Solutions",
+      location: "Bangalore, India",
+      period: "May 2025 – Jul 2025",
+      bullets: [
+        "Developed and deployed scalable REST APIs reducing request latency by 25%.",
+        "Collaborated with cross-functional teams to build intuitive web application dashboards.",
+      ],
+    },
+  ],
+  projects: [
+    {
+      name: "Campus Recruitment Portal",
+      tech: "Next.js, FastAPI, PostgreSQL",
+      period: "2025",
+      bullets: [
+        "Architected role-based dashboards and automated screening pipeline.",
+        "Integrated AI video and resume parsing workflows.",
+      ],
+    },
+  ],
+  skills: {
+    languages: ["Python", "TypeScript", "JavaScript", "Java", "C++"],
+    frameworks: ["React", "Next.js", "FastAPI", "Node.js"],
+    tools: ["PostgreSQL", "Docker", "Git", "AWS"],
+  },
+  achievements: [
+    "Finalist at National Level Hackathon 2025.",
+    "Solved 400+ algorithmic problems across online competitive coding platforms.",
+  ],
+};
+
+export default function ResumePreview({ data }: { data?: ResumeDataProps }) {
+  const resume = data || defaultResumeData;
+  const { personal, education, experience, skills, projects, achievements } = resume;
 
   return (
     <div className="bg-white text-[#0F172A] font-sans text-xs leading-relaxed rounded-xl overflow-hidden border border-border card-shadow">
@@ -11,124 +102,140 @@ export default function ResumePreview() {
         <h1 className="text-xl font-bold tracking-tight">{personal.name}</h1>
         <p className="text-xs text-[#4F46E5] font-semibold mt-0.5">{personal.title}</p>
         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs tracking-tight text-muted-foreground">
-          <span className="flex items-center gap-1"><Mail className="size-3" />{personal.email}</span>
-          <span className="flex items-center gap-1"><Phone className="size-3" />{personal.phone}</span>
-          <span className="flex items-center gap-1"><MapPin className="size-3" />{personal.location}</span>
-          <span className="flex items-center gap-1"><Globe className="size-3" />{personal.linkedin}</span>
-          <span className="flex items-center gap-1"><GitBranch className="size-3" />{personal.github}</span>
+          {personal.email && <span className="flex items-center gap-1"><Mail className="size-3" />{personal.email}</span>}
+          {personal.phone && <span className="flex items-center gap-1"><Phone className="size-3" />{personal.phone}</span>}
+          {personal.location && <span className="flex items-center gap-1"><MapPin className="size-3" />{personal.location}</span>}
+          {personal.linkedin && <span className="flex items-center gap-1"><Globe className="size-3" />{personal.linkedin}</span>}
+          {personal.github && <span className="flex items-center gap-1"><GitBranch className="size-3" />{personal.github}</span>}
         </div>
-        <p className="text-xs tracking-tight text-muted-foreground mt-2 leading-relaxed">{personal.summary}</p>
+        {personal.summary && <p className="text-xs tracking-tight text-muted-foreground mt-2 leading-relaxed">{personal.summary}</p>}
       </div>
 
       {/* Body */}
       <div className="px-6 py-4 space-y-4">
 
         {/* Education */}
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
-            Education
-          </h2>
-          {education.map((edu, i) => (
-            <div key={i} className="flex justify-between gap-2 mb-1.5">
-              <div>
-                <p className="font-semibold text-xs">{edu.institution}</p>
-                <p className="text-xs tracking-tight text-muted-foreground">{edu.degree}</p>
+        {education.length > 0 && (
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
+              Education
+            </h2>
+            {education.map((edu, i) => (
+              <div key={i} className="flex justify-between gap-2 mb-1.5">
+                <div>
+                  <p className="font-semibold text-xs">{edu.institution}</p>
+                  <p className="text-xs tracking-tight text-muted-foreground">{edu.degree}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs tracking-tight text-muted-foreground whitespace-nowrap">{edu.period}</p>
+                  <p className="text-xs tracking-tight font-semibold text-[#10B981]">{edu.score}</p>
+                </div>
               </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs tracking-tight text-muted-foreground whitespace-nowrap">{edu.period}</p>
-                <p className="text-xs tracking-tight font-semibold text-[#10B981]">{edu.score}</p>
-              </div>
-            </div>
-          ))}
-        </section>
+            ))}
+          </section>
+        )}
 
         {/* Experience */}
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
-            Experience
-          </h2>
-          {experience.map((exp, i) => (
-            <div key={i} className="mb-2">
-              <div className="flex justify-between">
-                <div>
-                  <p className="font-semibold text-xs">{exp.role}</p>
-                  <p className="text-xs tracking-tight text-muted-foreground">{exp.company} · {exp.location}</p>
+        {experience.length > 0 && (
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
+              Experience
+            </h2>
+            {experience.map((exp, i) => (
+              <div key={i} className="mb-2">
+                <div className="flex justify-between">
+                  <div>
+                    <p className="font-semibold text-xs">{exp.role}</p>
+                    <p className="text-xs tracking-tight text-muted-foreground">{exp.company} {exp.location ? `· ${exp.location}` : ""}</p>
+                  </div>
+                  <p className="text-xs tracking-tight text-muted-foreground shrink-0">{exp.period}</p>
                 </div>
-                <p className="text-xs tracking-tight text-muted-foreground shrink-0">{exp.period}</p>
+                <ul className="mt-1 space-y-0.5">
+                  {exp.bullets.map((b, j) => (
+                    <li key={j} className="flex items-start gap-1.5 text-xs tracking-tight text-[#334155]">
+                      <span className="size-1 rounded-full bg-[#4F46E5] mt-1.5 shrink-0" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="mt-1 space-y-0.5">
-                {exp.bullets.map((b, j) => (
-                  <li key={j} className="flex items-start gap-1.5 text-xs tracking-tight text-[#334155]">
-                    <span className="size-1 rounded-full bg-[#4F46E5] mt-1.5 shrink-0" />
-                    {b}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
+            ))}
+          </section>
+        )}
 
         {/* Projects */}
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
-            Projects
-          </h2>
-          {projects.map((proj, i) => (
-            <div key={i} className="mb-2">
-              <div className="flex justify-between">
-                <div>
-                  <span className="font-semibold text-xs">{proj.name}</span>
-                  <span className="text-xs tracking-tight text-[#8B5CF6] ml-1.5">{proj.tech}</span>
+        {projects.length > 0 && (
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
+              Projects
+            </h2>
+            {projects.map((proj, i) => (
+              <div key={i} className="mb-2">
+                <div className="flex justify-between">
+                  <div>
+                    <span className="font-semibold text-xs">{proj.name}</span>
+                    <span className="text-xs tracking-tight text-[#8B5CF6] ml-1.5">{proj.tech}</span>
+                  </div>
+                  <p className="text-xs tracking-tight text-muted-foreground shrink-0">{proj.period}</p>
                 </div>
-                <p className="text-xs tracking-tight text-muted-foreground shrink-0">{proj.period}</p>
+                <ul className="mt-0.5 space-y-0.5">
+                  {proj.bullets.map((b, j) => (
+                    <li key={j} className="flex items-start gap-1.5 text-xs tracking-tight text-[#334155]">
+                      <span className="size-1 rounded-full bg-[#4F46E5] mt-1.5 shrink-0" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="mt-0.5 space-y-0.5">
-                {proj.bullets.map((b, j) => (
-                  <li key={j} className="flex items-start gap-1.5 text-xs tracking-tight text-[#334155]">
-                    <span className="size-1 rounded-full bg-[#4F46E5] mt-1.5 shrink-0" />
-                    {b}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
+            ))}
+          </section>
+        )}
 
         {/* Skills */}
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
-            Skills
-          </h2>
-          <div className="space-y-1">
-            <div className="flex gap-1.5 flex-wrap">
-              <span className="font-semibold text-xs tracking-tight text-[#334155] w-20 shrink-0">Languages</span>
-              {skills.languages.map(s => <span key={s} className="text-xs tracking-tight text-muted-foreground">{s} ·</span>)}
+        {skills && (
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
+              Skills
+            </h2>
+            <div className="space-y-1">
+              {skills.languages && skills.languages.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap">
+                  <span className="font-semibold text-xs tracking-tight text-[#334155] w-20 shrink-0">Languages</span>
+                  {skills.languages.map(s => <span key={s} className="text-xs tracking-tight text-muted-foreground">{s} ·</span>)}
+                </div>
+              )}
+              {skills.frameworks && skills.frameworks.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap">
+                  <span className="font-semibold text-xs tracking-tight text-[#334155] w-20 shrink-0">Frameworks</span>
+                  {skills.frameworks.map(s => <span key={s} className="text-xs tracking-tight text-muted-foreground">{s} ·</span>)}
+                </div>
+              )}
+              {skills.tools && skills.tools.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap">
+                  <span className="font-semibold text-xs tracking-tight text-[#334155] w-20 shrink-0">Tools</span>
+                  {skills.tools.map(s => <span key={s} className="text-xs tracking-tight text-muted-foreground">{s} ·</span>)}
+                </div>
+              )}
             </div>
-            <div className="flex gap-1.5 flex-wrap">
-              <span className="font-semibold text-xs tracking-tight text-[#334155] w-20 shrink-0">Frameworks</span>
-              {skills.frameworks.map(s => <span key={s} className="text-xs tracking-tight text-muted-foreground">{s} ·</span>)}
-            </div>
-            <div className="flex gap-1.5 flex-wrap">
-              <span className="font-semibold text-xs tracking-tight text-[#334155] w-20 shrink-0">Tools</span>
-              {skills.tools.map(s => <span key={s} className="text-xs tracking-tight text-muted-foreground">{s} ·</span>)}
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Achievements */}
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
-            Achievements
-          </h2>
-          <ul className="space-y-0.5">
-            {achievements.map((a, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-xs tracking-tight text-[#334155]">
-                <span className="size-1 rounded-full bg-[#4F46E5] mt-1.5 shrink-0" />
-                {a}
-              </li>
-            ))}
-          </ul>
-        </section>
+        {achievements && achievements.length > 0 && (
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#4F46E5] border-b border-border pb-0.5 mb-2">
+              Achievements
+            </h2>
+            <ul className="space-y-0.5">
+              {achievements.map((a, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-xs tracking-tight text-[#334155]">
+                  <span className="size-1 rounded-full bg-[#4F46E5] mt-1.5 shrink-0" />
+                  {a}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </div>
   );

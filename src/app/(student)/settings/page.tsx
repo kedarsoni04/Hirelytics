@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Bell,
   Mail,
@@ -14,6 +14,7 @@ import {
   KeyRound,
   AlertTriangle,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,9 +22,16 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { studentProfile } from "@/lib/mock-data";
-
-// ── Tab definitions ───────────────────────────────────────────────────────────
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
 
 type Tab = "account" | "notifications" | "security" | "danger";
 
@@ -33,8 +41,6 @@ const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "security", label: "Password & Security", icon: Shield },
   { id: "danger", label: "Danger Zone", icon: Trash2 },
 ];
-
-// ── Notification preference rows ─────────────────────────────────────────────
 
 type PrefRow = {
   id: string;
@@ -51,8 +57,6 @@ const notifPrefs: PrefRow[] = [
   { id: "inapp_applications", label: "Application Alerts (In-App)", description: "In-app badge and alert for all application events.", icon: Smartphone },
   { id: "email_digest", label: "Weekly Digest", description: "Weekly summary of activity, new drives, and AI tips.", icon: Mail },
 ];
-
-// ── Toggle switch row ──────────────────────────────────────────────────────────
 
 function PrefToggleRow({ pref, checked, onChange }: { pref: PrefRow; checked: boolean; onChange: (v: boolean) => void }) {
   const Icon = pref.icon;
@@ -76,8 +80,6 @@ function PrefToggleRow({ pref, checked, onChange }: { pref: PrefRow; checked: bo
   );
 }
 
-// ── Section heading ───────────────────────────────────────────────────────────
-
 function SectionHead({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-5">
@@ -87,19 +89,87 @@ function SectionHead({ title, description }: { title: string; description?: stri
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
-
 export default function SettingsPage() {
+  const { user, logout, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("account");
   const [showPassword, setShowPassword] = useState(false);
+  const [savingAccount, setSavingAccount] = useState(false);
   const [savedAccount, setSavedAccount] = useState(false);
-  const [prefs, setPrefs] = useState<Record<string, boolean>>(
-    Object.fromEntries(notifPrefs.map((p) => [p.id, p.id !== "email_digest"]))
-  );
 
-  const handleSaveAccount = () => {
-    setSavedAccount(true);
-    setTimeout(() => setSavedAccount(false), 2000);
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [savedPrefs, setSavedPrefs] = useState(false);
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  // Form states
+  const [fullName, setFullName] = useState(user?.full_name || "");
+  const [college, setCollege] = useState(user?.college || "");
+  const [branch, setBranch] = useState(user?.branch || "");
+  const [cgpa, setCgpa] = useState(user?.cgpa !== undefined && user?.cgpa !== null ? String(user.cgpa) : "");
+
+  const [prefs, setPrefs] = useState<Record<string, boolean>>({
+    email_applications: true,
+    email_interviews: true,
+    email_offers: true,
+    inapp_ai: true,
+    inapp_applications: true,
+    email_digest: false,
+  });
+
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  if (user && !isInitialized) {
+    setFullName(user.full_name || "");
+    setCollege(user.college || "");
+    setBranch(user.branch || "");
+    setCgpa(user.cgpa !== undefined && user.cgpa !== null ? String(user.cgpa) : "");
+    setIsInitialized(true);
+  }
+
+  const handleSaveAccount = async () => {
+    try {
+      setSavingAccount(true);
+      await api.updateProfile({
+        full_name: fullName,
+        college,
+        branch,
+        cgpa: cgpa ? parseFloat(cgpa) : undefined,
+      });
+      await refreshUser();
+      setSavedAccount(true);
+      setTimeout(() => setSavedAccount(false), 2000);
+    } catch (e) {
+      console.error("Failed to update profile:", e);
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
+  const handleSavePrefs = async () => {
+    try {
+      setSavingPrefs(true);
+      await api.updateProfile({
+        notification_prefs: prefs,
+      });
+      setSavedPrefs(true);
+      setTimeout(() => setSavedPrefs(false), 2000);
+    } catch (e) {
+      console.error("Failed to update notification prefs:", e);
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      setDeletingAccount(true);
+      await api.deleteAccount();
+      logout();
+    } catch (e) {
+      console.error("Failed to delete account:", e);
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -154,35 +224,69 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="s-name" className="text-xs">Full Name</Label>
-                      <Input id="s-name" defaultValue={studentProfile.name} className="h-9 text-sm" />
+                      <Input
+                        id="s-name"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        className="h-9 text-sm"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="s-email" className="text-xs">Email Address</Label>
-                      <Input id="s-email" type="email" defaultValue={studentProfile.email} className="h-9 text-sm" />
+                      <Input
+                        id="s-email"
+                        type="email"
+                        disabled
+                        value={user?.email || ""}
+                        className="h-9 text-sm bg-muted text-muted-foreground"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="s-college" className="text-xs">College / University</Label>
-                      <Input id="s-college" defaultValue={studentProfile.college} className="h-9 text-sm" />
+                      <Input
+                        id="s-college"
+                        value={college}
+                        onChange={(e) => setCollege(e.target.value)}
+                        className="h-9 text-sm"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="s-branch" className="text-xs">Branch / Programme</Label>
-                      <Input id="s-branch" defaultValue={studentProfile.branch} className="h-9 text-sm" />
+                      <Input
+                        id="s-branch"
+                        value={branch}
+                        onChange={(e) => setBranch(e.target.value)}
+                        className="h-9 text-sm"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="s-cgpa" className="text-xs">CGPA</Label>
-                      <Input id="s-cgpa" defaultValue={String(studentProfile.cgpa)} className="h-9 text-sm" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="s-year" className="text-xs">Graduation Year</Label>
-                      <Input id="s-year" defaultValue={String(studentProfile.graduationYear)} className="h-9 text-sm" />
+                      <Input
+                        id="s-cgpa"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="10"
+                        value={cgpa}
+                        onChange={(e) => setCgpa(e.target.value)}
+                        className="h-9 text-sm"
+                      />
                     </div>
                   </div>
                   <Separator />
                   <div className="flex justify-end">
-                    <Button onClick={handleSaveAccount} className="brand-gradient text-white text-xs gap-2 hover:opacity-90 transition-opacity">
-                      {savedAccount ? (
+                    <Button
+                      onClick={handleSaveAccount}
+                      disabled={savingAccount}
+                      className="brand-gradient text-white text-xs gap-2 hover:opacity-90 transition-opacity"
+                    >
+                      {savingAccount ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : savedAccount ? (
                         <><CheckCircle2 className="size-3.5" /> Saved</>
-                      ) : "Save Changes"}
+                      ) : (
+                        "Save Changes"
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -200,15 +304,25 @@ export default function SettingsPage() {
                     <PrefToggleRow
                       key={pref.id}
                       pref={pref}
-                      checked={prefs[pref.id]}
+                      checked={prefs[pref.id] ?? false}
                       onChange={(v) => setPrefs((p) => ({ ...p, [pref.id]: v }))}
                     />
                   ))}
                 </div>
                 <Separator className="mt-4 mb-4" />
                 <div className="flex justify-end">
-                  <Button className="brand-gradient text-white text-xs hover:opacity-90 transition-opacity">
-                    Save Preferences
+                  <Button
+                    onClick={handleSavePrefs}
+                    disabled={savingPrefs}
+                    className="brand-gradient text-white text-xs hover:opacity-90 transition-opacity gap-2"
+                  >
+                    {savingPrefs ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : savedPrefs ? (
+                      <><CheckCircle2 className="size-3.5" /> Saved</>
+                    ) : (
+                      "Save Preferences"
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -283,28 +397,16 @@ export default function SettingsPage() {
                 <Separator className="bg-[#F43F5E]/20" />
 
                 <div className="space-y-4">
-                  {/* Deactivate */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white border border-[#F43F5E]/20">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">Deactivate Account</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Temporarily hide your profile from recruiters. You can reactivate anytime.
-                      </p>
-                    </div>
-                    <Button variant="outline" size="sm" className="text-xs border-[#F59E0B] text-[#92400E] hover:bg-[#FEF3C7] shrink-0">
-                      Deactivate
-                    </Button>
-                  </div>
-
-                  {/* Delete */}
+                  {/* Delete Account */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white border border-[#F43F5E]/40">
                     <div>
                       <p className="text-sm font-semibold text-[#9F1239]">Delete Account</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Permanently delete your account and all associated data. This cannot be undone.
+                        Deactivate your account and remove access to your profile and applications.
                       </p>
                     </div>
                     <Button
+                      onClick={() => setDeleteModalOpen(true)}
                       size="sm"
                       className="text-xs bg-[#F43F5E] hover:bg-[#E11D48] text-white shrink-0"
                     >
@@ -318,6 +420,43 @@ export default function SettingsPage() {
 
         </div>
       </div>
+
+      {/* Confirmation Dialog for Account Deletion */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="sm:max-w-md p-6 gap-4">
+          <DialogHeader>
+            <DialogTitle className="text-lg text-rose-600 flex items-center gap-2">
+              <AlertTriangle className="size-5" /> Confirm Account Deletion
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-2 leading-relaxed">
+              Are you sure you want to delete your account? This action will deactivate your student profile and log you out.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="sm:justify-end gap-2 mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={deletingAccount}
+              onClick={() => setDeleteModalOpen(false)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={deletingAccount}
+              onClick={handleDeleteAccount}
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold"
+            >
+              {deletingAccount ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : null}
+              Yes, Delete My Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

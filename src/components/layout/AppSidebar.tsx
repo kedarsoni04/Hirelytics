@@ -29,7 +29,7 @@ import {
   Plus,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { studentProfile, companyProfile, adminProfile } from "@/lib/mock-data";
+
 import { useAuth } from "@/lib/auth-context";
 
 type NavItem = {

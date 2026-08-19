@@ -131,6 +131,21 @@ def submit_assessment(
         proctor_flags=payload.proctor_flags or []
     )
     db.add(submission)
+    db.flush()
+    
+    log = models.ActivityLog(
+        user_id=current_user.id,
+        action=f"Completed assessment for {application.drive.title} — scored {score}%",
+        log_metadata={"drive_id": application.drive.id, "application_id": application.id}
+    )
+    db.add(log)
+    
+    notif = models.Notification(
+        user_id=current_user.id,
+        type="ai_result_ready",
+        message=f"Your assessment for {application.drive.title} was scored: {score}%"
+    )
+    db.add(notif)
 
     # Move application stage
     application.current_stage = models.ApplicationStage.assessment

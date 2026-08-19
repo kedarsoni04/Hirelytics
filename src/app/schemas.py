@@ -62,6 +62,7 @@ class StudentOut(BaseModel):
     github_url: Optional[str] = None
     portfolio_url: Optional[str] = None
     profile_photo: Optional[str] = None
+    notification_prefs: Optional[Dict[str, Any]] = None
     status: StudentStatus
     created_at: datetime
 
@@ -82,6 +83,7 @@ class CompanyOut(BaseModel):
     company_name: str
     industry: Optional[str] = None
     logo_url: Optional[str] = None
+    notification_prefs: Optional[Dict[str, Any]] = None
     status: CompanyStatus
     created_at: datetime
 
@@ -240,3 +242,28 @@ class NotificationOut(BaseModel):
     message: str
     is_read: bool
     created_at: datetime
+
+
+# ─────────────────────────────────────────────
+# ACTIVITY LOG & STATS
+# ─────────────────────────────────────────────
+
+class ActivityLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_id: Optional[str]
+    action: str
+    log_metadata: Dict[str, Any]
+    created_at: datetime
+
+
+class StudentStatsOut(BaseModel):
+    applications_sent: int
+    shortlisted: int
+    interviews_scheduled: int
+    offers_received: int
+    ai_score: Optional[int] = None
+    dsa_score: Optional[int] = None
+    communication_score: Optional[int] = None
+    resume_score: Optional[int] = None

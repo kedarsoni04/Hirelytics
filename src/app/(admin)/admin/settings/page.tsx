@@ -5,7 +5,22 @@ import { Settings2, Shield, Activity, Save, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, Column } from "@/components/ui/DataTable";
-import { platformLogs } from "@/lib/mock-data";
+
+interface PlatformLog {
+  id: string;
+  timestamp: string;
+  action: string;
+  user: string;
+  status: "Success" | "Warning" | "Failed" | "In Progress";
+}
+
+const defaultPlatformLogs: PlatformLog[] = [
+  { id: "log1", timestamp: "2026-08-18 10:14:02", action: "Company Verified: Swiggy", user: "Admin (SA)", status: "Success" },
+  { id: "log2", timestamp: "2026-08-18 09:30:15", action: "System Backup Initiated", user: "System", status: "In Progress" },
+  { id: "log3", timestamp: "2026-08-17 18:45:00", action: "Flagged Student Account: John Doe", user: "AI Moderator", status: "Warning" },
+  { id: "log4", timestamp: "2026-08-17 14:20:11", action: "Failed Login Attempt", user: "Unknown IP", status: "Failed" },
+  { id: "log5", timestamp: "2026-08-16 11:10:05", action: "Suspended Company: Global Consulting", user: "Admin (SA)", status: "Success" },
+];
 
 export default function AdminSettingsPage() {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -26,7 +41,7 @@ export default function AdminSettingsPage() {
     showToast("Admin invitation link generated & copied to clipboard.");
   };
 
-  const logColumns: Column<typeof platformLogs[0]>[] = [
+  const logColumns: Column<PlatformLog>[] = [
     { header: "Timestamp", accessorKey: "timestamp" },
     { header: "Action", accessorKey: "action" },
     { header: "User", accessorKey: "user" },
@@ -165,7 +180,7 @@ export default function AdminSettingsPage() {
           <Activity className="size-5 text-[#4F46E5]" /> System Logs
         </h2>
         <DataTable
-          data={platformLogs}
+          data={defaultPlatformLogs}
           columns={logColumns}
           keyExtractor={(log) => log.id}
         />
@@ -182,4 +197,3 @@ export default function AdminSettingsPage() {
     </div>
   );
 }
-

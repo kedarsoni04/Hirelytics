@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Trophy,
   ArrowRight,
+  Volume2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +43,9 @@ export default function InterviewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   useEffect(() => {
     if (!applicationId) return;
 
@@ -64,6 +68,32 @@ export default function InterviewPage() {
 
     loadInterview();
   }, [applicationId]);
+
+  // TTS implementation
+  const readAloud = (text: string) => {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    // Try to find a good English voice
+    const voice = voices.find(v => v.lang.startsWith("en-") && (v.name.includes("Google") || v.name.includes("Natural"))) || voices.find(v => v.lang.startsWith("en-"));
+    if (voice) {
+      utterance.voice = voice;
+    }
+    window.speechSynthesis.speak(utterance);
+  };
+
+  useEffect(() => {
+    if (interview?.questions && interview.questions[currentQuestionIndex]) {
+      const q = interview.questions[currentQuestionIndex];
+      const text = typeof q === "string" ? q : q.question || q.text;
+      if (text) {
+        // slight delay to ensure smooth transition
+        setTimeout(() => readAloud(text), 500);
+      }
+    }
+  }, [currentQuestionIndex, interview]);
 
   if (loading) {
     return (
@@ -133,30 +163,56 @@ export default function InterviewPage() {
   const total = questions.length;
   const currentQ = questions[currentQuestionIndex];
 
-  const handleRecord = () => {
-    setState("recording");
+  const handleRecord = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        setState("analyzing");
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        stream.getTracks().forEach((track) => track.stop());
+
+        const formData = new FormData();
+        formData.append("file", audioBlob, "recording.webm");
+
+        try {
+          const res = await api.transcribeAudio(formData);
+          setRecordedTranscripts((prev) => ({
+            ...prev,
+            [currentQuestionIndex]: res.transcript || "No speech detected.",
+          }));
+        } catch (err: any) {
+          console.error("Transcription error:", err);
+          setRecordedTranscripts((prev) => ({
+            ...prev,
+            [currentQuestionIndex]: "[Error transcribing audio. Please try again.]",
+          }));
+        } finally {
+          setState("done");
+        }
+      };
+
+      mediaRecorder.start();
+      setState("recording");
+    } catch (err) {
+      console.error("Microphone access error:", err);
+      alert("Microphone access is required to record your answer.");
+    }
   };
 
   const handleStop = () => {
-    setState("analyzing");
-    // Simulate speech-to-text transcription
-    setTimeout(() => {
-      const simulatedResponses = [
-        "In my recent project, I built a high-throughput backend using Python and FastAPI. We handled 10,000 requests per minute by implementing Redis caching and asynchronous workers.",
-        "I recently picked up Next.js 15 and Tailwind CSS. I started by building small proof-of-concept prototypes and reading documentation thoroughly.",
-        "When resolving technical disagreements, I always anchor discussions on data, system metrics, and maintainability rather than personal preference.",
-        "I prioritize end-to-end testing and strict CI/CD pipelines with automated type checking to ensure zero regressions in production.",
-      ];
-      const answer =
-        simulatedResponses[currentQuestionIndex % simulatedResponses.length] ||
-        "I focused on architectural clarity, clean code standards, and comprehensive testing.";
-
-      setRecordedTranscripts((prev) => ({
-        ...prev,
-        [currentQuestionIndex]: answer,
-      }));
-      setState("done");
-    }, 1500);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
   };
 
   const handleRetake = () => {
@@ -249,7 +305,7 @@ export default function InterviewPage() {
             {state === "analyzing" && (
               <div className="flex flex-col items-center gap-4 w-full max-w-xs">
                 <Button disabled size="lg" className="w-full rounded-full font-bold ai-gradient text-white opacity-80 h-12">
-                  <Loader2 className="size-4 animate-spin mr-2" /> Processing Response...
+                  <Loader2 className="size-4 animate-spin mr-2" /> Processing Audio via Whisper AI...
                 </Button>
                 <Progress value={75} className="h-2 w-full">
                   <ProgressTrack className="h-1.5">
@@ -266,8 +322,15 @@ export default function InterviewPage() {
               <div className="flex flex-col items-center w-full max-w-xs gap-3">
                 <div className="flex items-center gap-2 text-emerald-600 mb-2">
                   <CheckCircle2 className="size-5" />
-                  <span className="font-semibold text-sm">Response Captured</span>
+                  <span className="font-semibold text-sm">Response Transcribed</span>
                 </div>
+                
+                {/* Transcript preview */}
+                <div className="w-full text-left bg-gray-50 p-3 rounded-lg border text-sm max-h-32 overflow-y-auto mb-2 text-gray-700">
+                  <p className="text-xs font-semibold text-gray-500 mb-1">Transcript:</p>
+                  "{recordedTranscripts[currentQuestionIndex]}"
+                </div>
+
                 <Button
                   onClick={handleNext}
                   disabled={submitting}
@@ -344,6 +407,18 @@ export default function InterviewPage() {
               <h2 className="text-2xl font-bold text-foreground leading-tight">
                 {typeof currentQ === "string" ? currentQ : currentQ.question || currentQ.text || "Interview Question"}
               </h2>
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50 mt-2"
+                onClick={() => {
+                  const text = typeof currentQ === "string" ? currentQ : currentQ.question || currentQ.text;
+                  if (text) readAloud(text);
+                }}
+              >
+                <Volume2 className="size-3.5" /> Read Aloud
+              </Button>
 
               {/* AI Tip */}
               <div className="mt-8 p-4 rounded-xl bg-[#EDE9FE] border border-violet-200/50">

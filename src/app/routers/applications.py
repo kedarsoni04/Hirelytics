@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel, ConfigDict
 
 from app import models, schemas
@@ -118,6 +118,31 @@ def apply_to_drive(
         current_stage=models.ApplicationStage.applied,
     )
     db.add(application)
+    db.flush()
+    
+    log = models.ActivityLog(
+        user_id=current_user.id,
+        action=f"Applied to {drive.title} at {drive.company.company_name}",
+        log_metadata={"drive_id": drive.id, "application_id": application.id}
+    )
+    db.add(log)
+    
+    # Notify Student
+    notif_student = models.Notification(
+        user_id=current_user.id,
+        type="application_update",
+        message=f"Your application to {drive.title} was submitted"
+    )
+    db.add(notif_student)
+    
+    # Notify Company
+    notif_company = models.Notification(
+        user_id=drive.company.user_id,
+        type="application_update",
+        message=f"New applicant for {drive.title}: {student.full_name}"
+    )
+    db.add(notif_company)
+    
     db.commit()
     db.refresh(application)
     return application
@@ -134,6 +159,7 @@ def get_my_applications(
 
     applications = (
         db.query(models.Application)
+        .options(joinedload(models.Application.drive).joinedload(models.Drive.company), joinedload(models.Application.student))
         .filter(models.Application.student_id == student.id)
         .order_by(models.Application.applied_at.desc())
         .all()
@@ -163,6 +189,7 @@ def get_applications_for_drive(
 
     applications = (
         db.query(models.Application)
+        .options(joinedload(models.Application.drive).joinedload(models.Drive.company), joinedload(models.Application.student))
         .filter(models.Application.drive_id == drive.id)
         .order_by(models.Application.applied_at.desc())
         .all()
@@ -196,6 +223,36 @@ def update_application_stage(
         )
 
     app_obj.current_stage = payload.current_stage
+
+    if payload.current_stage == models.ApplicationStage.shortlisted:
+        log = models.ActivityLog(
+            user_id=app_obj.student.user_id,
+            action=f"Shortlisted for {app_obj.drive.title} at {company.company_name}",
+            log_metadata={"drive_id": app_obj.drive.id, "application_id": app_obj.id}
+        )
+        db.add(log)
+        
+        notif = models.Notification(
+            user_id=app_obj.student.user_id,
+            type="shortlisted",
+            message=f"You've been shortlisted for {app_obj.drive.title} at {company.company_name}"
+        )
+        db.add(notif)
+    elif payload.current_stage == models.ApplicationStage.offered:
+        log = models.ActivityLog(
+            user_id=app_obj.student.user_id,
+            action=f"Offer received from {company.company_name} for {app_obj.drive.title}",
+            log_metadata={"drive_id": app_obj.drive.id, "application_id": app_obj.id}
+        )
+        db.add(log)
+
+        notif = models.Notification(
+            user_id=app_obj.student.user_id,
+            type="offer",
+            message=f"Congratulations! You received an offer from {company.company_name}"
+        )
+        db.add(notif)
+
     db.commit()
     db.refresh(app_obj)
     return app_obj

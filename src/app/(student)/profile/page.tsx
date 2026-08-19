@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Pencil,
   Check,
@@ -83,6 +83,12 @@ export default function ProfilePage() {
 
   // Skills chip state (separate from string-valued form fields)
   const [editSkills, setEditSkills] = useState<string[]>([]);
+
+  // Resume upload state
+  const [resumeUploading, setResumeUploading] = useState(false);
+  const [resumeError, setResumeError] = useState("");
+  const [resumeSuccess, setResumeSuccess] = useState(false);
+  const resumeInputRef = useRef<HTMLInputElement>(null);
 
   // Form state — initialised from user when edit mode opens
   const [form, setForm] = useState({
@@ -180,6 +186,39 @@ export default function ProfilePage() {
     onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
       setForm((prev) => ({ ...prev, [key]: e.target.value })),
   });
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Client-side validation
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setResumeError("Only PDF files are accepted.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setResumeError("File too large. Maximum size is 5 MB.");
+      return;
+    }
+
+    setResumeError("");
+    setResumeSuccess(false);
+    setResumeUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const updated = await api.uploadResume(formData);
+      updateUser({ resume_url: updated.resume_url });
+      setResumeSuccess(true);
+      setTimeout(() => setResumeSuccess(false), 4000);
+    } catch (err: any) {
+      setResumeError(err.message || "Upload failed. Please try again.");
+    } finally {
+      setResumeUploading(false);
+      // Reset input so the same file can be re-selected after an error
+      if (resumeInputRef.current) resumeInputRef.current.value = "";
+    }
+  };
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -415,14 +454,64 @@ export default function ProfilePage() {
           {/* ── Resume ── */}
           <Section icon={FileText} title="Resume" iconBg="#EEF2FF" iconColor="#4F46E5">
             <div className="space-y-4">
-              <div className="flex flex-col items-center py-6 text-center gap-2">
-                <FileText className="size-8 text-muted-foreground/30" />
-                <p className="text-xs text-muted-foreground">No resume uploaded yet.</p>
-                <p className="text-xs text-muted-foreground/60">Upload your resume to boost your AI match score.</p>
-              </div>
-              <Button variant="outline" className="w-full border-dashed text-xs gap-2">
-                <Upload className="size-3.5" /> Upload Resume
+              {/* Current status */}
+              {user.resume_url ? (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                  <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-emerald-800">Resume uploaded</p>
+                    <p className="text-xs text-emerald-600 truncate">{user.resume_url.split("/").pop()}</p>
+                  </div>
+                  <a href={user.resume_url} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-100">
+                      <ExternalLink className="size-3" /> View
+                    </Button>
+                  </a>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center py-4 text-center gap-1">
+                  <FileText className="size-8 text-muted-foreground/30" />
+                  <p className="text-xs text-muted-foreground">No resume uploaded yet.</p>
+                  <p className="text-xs text-muted-foreground/60">Upload your resume to boost your AI match score.</p>
+                </div>
+              )}
+
+              {/* Success message */}
+              {resumeSuccess && (
+                <div className="flex items-center gap-2 text-emerald-600 text-xs font-medium">
+                  <CheckCircle2 className="size-3.5" />
+                  Resume uploaded successfully ✓
+                </div>
+              )}
+
+              {/* Error message */}
+              {resumeError && (
+                <p className="text-xs text-rose-500">{resumeError}</p>
+              )}
+
+              {/* Upload button */}
+              <input
+                ref={resumeInputRef}
+                type="file"
+                accept=".pdf"
+                className="hidden"
+                id="resume-upload-input"
+                onChange={handleResumeUpload}
+                disabled={resumeUploading}
+              />
+              <Button
+                variant="outline"
+                className="w-full border-dashed text-xs gap-2 hover:border-[#4F46E5] hover:text-[#4F46E5] transition-colors"
+                disabled={resumeUploading}
+                onClick={() => resumeInputRef.current?.click()}
+              >
+                {resumeUploading ? (
+                  <><Loader2 className="size-3.5 animate-spin" /> Uploading…</>
+                ) : (
+                  <><Upload className="size-3.5" /> {user.resume_url ? "Replace Resume PDF" : "Upload Resume PDF"}</>
+                )}
               </Button>
+              <p className="text-xs text-muted-foreground/60 text-center">Max 5 MB · PDF only</p>
             </div>
           </Section>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { MCQOption } from "@/lib/mock-data";
+import type { MCQOption } from "@/lib/types";
 
 interface OptionCardProps {
   option: MCQOption;

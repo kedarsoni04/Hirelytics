@@ -195,7 +195,7 @@ export default function CandidateListPage() {
   const shortlistedCount = applications.filter((a) => a.current_stage === "shortlisted").length;
   const rejectedCount = applications.filter((a) => a.current_stage === "rejected").length;
 
-  const SortIcon = ({ field }: { field: SortField }) => {
+  const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown className="size-3.5 opacity-40" />;
     return sortDir === "desc" ? (
       <ArrowDown className="size-3.5 text-[#4F46E5]" />
@@ -268,7 +268,7 @@ export default function CandidateListPage() {
                 )}
               >
                 {field === "date" ? "Date" : field === "cgpa" ? "CGPA" : "Name"}
-                <SortIcon field={field} />
+                {renderSortIcon(field)}
               </button>
             ))}
           </div>
@@ -296,7 +296,7 @@ export default function CandidateListPage() {
             onClick={() => toggleSort("cgpa")}
             className="flex items-center gap-1 hover:text-foreground transition-colors"
           >
-            CGPA <SortIcon field="cgpa" />
+            CGPA {renderSortIcon("cgpa")}
           </button>
           <span>Stage</span>
           <span className="text-right">Actions</span>

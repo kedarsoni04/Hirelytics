@@ -21,6 +21,9 @@ export default function SignupPage() {
   // Company fields
   const [companyName, setCompanyName] = useState("");
 
+  // Admin fields
+  const [adminFullName, setAdminFullName] = useState("");
+
   const [error, setError] = useState("");
   const { refreshUser } = useAuth();
 
@@ -34,8 +37,11 @@ export default function SignupPage() {
         payload.college = college;
         payload.branch = branch;
         if (cgpa) payload.cgpa = parseFloat(cgpa);
-      } else {
+      } else if (role === "company") {
         payload.company_name = companyName;
+      } else if (role === "admin") {
+        payload.admin_full_name = adminFullName;
+        payload.full_name = adminFullName;
       }
 
       const result = await api.signup(payload);
@@ -58,9 +64,10 @@ export default function SignupPage() {
           {error && <div className="text-red-500 text-center text-sm">{error}</div>}
 
           {/* Role selector */}
-          <div className="flex justify-center space-x-4 mb-4">
+          <div className="flex justify-center space-x-2 mb-4">
             <Button
               type="button"
+              size="sm"
               variant={role === "student" ? "default" : "outline"}
               onClick={() => setRole("student")}
             >
@@ -68,10 +75,19 @@ export default function SignupPage() {
             </Button>
             <Button
               type="button"
+              size="sm"
               variant={role === "company" ? "default" : "outline"}
               onClick={() => setRole("company")}
             >
               Company
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={role === "admin" ? "default" : "outline"}
+              onClick={() => setRole("admin")}
+            >
+              Admin
             </Button>
           </div>
 
@@ -103,7 +119,7 @@ export default function SignupPage() {
             </div>
 
             {/* Student-specific fields */}
-            {role === "student" ? (
+            {role === "student" && (
               <>
                 <div>
                   <label htmlFor="fullName" className="sr-only">Full Name</label>
@@ -156,7 +172,10 @@ export default function SignupPage() {
                   />
                 </div>
               </>
-            ) : (
+            )}
+
+            {/* Company-specific fields */}
+            {role === "company" && (
               <div>
                 <label htmlFor="companyName" className="sr-only">Company Name</label>
                 <Input
@@ -167,6 +186,22 @@ export default function SignupPage() {
                   placeholder="Company Name"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
+                />
+              </div>
+            )}
+
+            {/* Admin-specific fields */}
+            {role === "admin" && (
+              <div>
+                <label htmlFor="adminFullName" className="sr-only">Admin Full Name</label>
+                <Input
+                  id="adminFullName"
+                  name="adminFullName"
+                  type="text"
+                  required
+                  placeholder="Admin Full Name"
+                  value={adminFullName}
+                  onChange={(e) => setAdminFullName(e.target.value)}
                 />
               </div>
             )}

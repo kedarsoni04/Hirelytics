@@ -1,12 +1,11 @@
 "use client";
 
-import type { Metadata } from "next";
-import { Building2, Users, Briefcase, Award, CheckCircle2, XCircle, Clock, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Building2, Users, Briefcase, Award, CheckCircle2, XCircle, Clock, Sparkles, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { platformStats, platformActivity, adminCompanies } from "@/lib/mock-data";
-import { useState } from "react";
+import { api } from "@/lib/api";
 
 const statIcons: Record<string, React.ElementType> = {
   building: Building2,
@@ -22,18 +21,83 @@ const statStyles: Record<string, { bg: string; text: string }> = {
   award: { bg: "bg-amber-50", text: "text-amber-600" },
 };
 
+interface AdminStatItem {
+  label: string;
+  value: number;
+  icon: string;
+  trend: string;
+  trendUp: boolean | null;
+}
+
+interface PendingCompanyItem {
+  id: string;
+  name: string;
+  industry: string;
+  status: string;
+  joined: string;
+  logo: string;
+}
+
+interface ActivityItem {
+  id: string;
+  text: string;
+  time: string;
+  type: "success" | "default" | "warning";
+  ai: boolean;
+}
+
 export default function AdminDashboardPage() {
-  const [pendingCompanies, setPendingCompanies] = useState(adminCompanies.filter(c => c.status === "Pending"));
+  const [stats, setStats] = useState<AdminStatItem[]>([]);
+  const [pendingCompanies, setPendingCompanies] = useState<PendingCompanyItem[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleApprove = (id: string) => {
-    console.log(`Approved company: ${id}`);
-    setPendingCompanies(prev => prev.filter(c => c.id !== id));
+  const loadData = async () => {
+    try {
+      const data = await api.getAdminDashboardStats();
+      if (data) {
+        setStats(data.stats || []);
+        setPendingCompanies(data.pendingCompanies || []);
+        setActivities(data.recentActivity || []);
+      }
+    } catch (err) {
+      console.error("Failed to load admin stats:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleReject = (id: string) => {
-    console.log(`Rejected company: ${id}`);
-    setPendingCompanies(prev => prev.filter(c => c.id !== id));
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleApprove = async (id: string) => {
+    try {
+      await api.updateCompanyStatus(id, "verified");
+      setPendingCompanies(prev => prev.filter(c => c.id !== id));
+      loadData();
+    } catch (e) {
+      console.error("Failed to approve company:", e);
+    }
   };
+
+  const handleReject = async (id: string) => {
+    try {
+      await api.updateCompanyStatus(id, "suspended");
+      setPendingCompanies(prev => prev.filter(c => c.id !== id));
+      loadData();
+    } catch (e) {
+      console.error("Failed to reject company:", e);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
@@ -48,7 +112,7 @@ export default function AdminDashboardPage() {
 
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {platformStats.map((stat) => {
+        {stats.map((stat) => {
           const Icon = statIcons[stat.icon] || Briefcase;
           const style = statStyles[stat.icon] || { bg: "bg-[#EEF2FF]", text: "text-[#4F46E5]" };
           return (
@@ -83,32 +147,38 @@ export default function AdminDashboardPage() {
           <h2 className="text-base font-bold text-foreground">Recent Platform Activity</h2>
           <Card className="card-shadow border-border/60">
             <CardContent className="p-0">
-              {platformActivity.map((item, i) => (
-                <div key={item.id}>
-                  {i > 0 && <Separator />}
-                  <div className="flex items-start gap-3 px-5 py-4">
-                    <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                      item.ai ? "ai-gradient" : item.type === "warning" ? "bg-amber-100" : item.type === "success" ? "bg-emerald-100" : "bg-muted"
-                    }`}>
-                      {item.ai ? (
-                        <Sparkles className="size-4 text-white" />
-                      ) : item.type === "warning" ? (
-                        <CheckCircle2 className="size-4 text-amber-600" />
-                      ) : item.type === "success" ? (
-                        <CheckCircle2 className="size-4 text-emerald-600" />
-                      ) : (
-                        <Clock className="size-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm leading-relaxed ${item.ai ? "text-[#4C1D95] font-medium" : "text-foreground"}`}>
-                        {item.text}
-                      </p>
-                      <p className="text-xs tracking-tight text-muted-foreground mt-1">{item.time}</p>
+              {activities.length === 0 ? (
+                <div className="p-8 text-center text-xs text-muted-foreground">
+                  No recent activity logged yet.
+                </div>
+              ) : (
+                activities.map((item, i) => (
+                  <div key={item.id}>
+                    {i > 0 && <Separator />}
+                    <div className="flex items-start gap-3 px-5 py-4">
+                      <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                        item.ai ? "ai-gradient" : item.type === "warning" ? "bg-amber-100" : item.type === "success" ? "bg-emerald-100" : "bg-muted"
+                      }`}>
+                        {item.ai ? (
+                          <Sparkles className="size-4 text-white" />
+                        ) : item.type === "warning" ? (
+                          <CheckCircle2 className="size-4 text-amber-600" />
+                        ) : item.type === "success" ? (
+                          <CheckCircle2 className="size-4 text-emerald-600" />
+                        ) : (
+                          <Clock className="size-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm leading-relaxed ${item.ai ? "text-[#4C1D95] font-medium" : "text-foreground"}`}>
+                          {item.text}
+                        </p>
+                        <p className="text-xs tracking-tight text-muted-foreground mt-1">{item.time}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </div>

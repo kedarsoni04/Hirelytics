@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Bell,
   Trophy,
@@ -10,64 +10,88 @@ import {
   Settings,
   CheckCheck,
   X,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { notifications, type NotifType } from "@/lib/mock-data";
+import { api } from "@/lib/api";
+import { formatDistanceToNow, isToday, parseISO } from "date-fns";
 
 // ── Icon + color config per notification type ─────────────────────────────────
 
-const notifConfig: Record<
-  NotifType,
-  { icon: React.ElementType; bg: string; color: string; label: string }
-> = {
-  offer: {
-    icon: Trophy,
-    bg: "#FCE7F3",
-    color: "#9D174D",
-    label: "Offer",
-  },
-  interview: {
-    icon: Calendar,
-    bg: "#DBEAFE",
-    color: "#1E40AF",
-    label: "Interview",
-  },
-  ai_result: {
-    icon: Sparkles,
-    bg: "#EDE9FE",
-    color: "#5B21B6",
-    label: "AI Result",
-  },
-  application: {
-    icon: Send,
-    bg: "#EEF2FF",
-    color: "#3730A3",
-    label: "Application",
-  },
-  system: {
-    icon: Settings,
-    bg: "#F1F5F9",
-    color: "#475569",
-    label: "System",
-  },
+const notifConfig: Record<string, { icon: React.ElementType; bg: string; color: string; label: string }> = {
+  offer: { icon: Trophy, bg: "#FCE7F3", color: "#9D174D", label: "Offer" },
+  shortlisted: { icon: Trophy, bg: "#FCE7F3", color: "#9D174D", label: "Shortlist" },
+  interview: { icon: Calendar, bg: "#DBEAFE", color: "#1E40AF", label: "Interview" },
+  ai_result_ready: { icon: Sparkles, bg: "#EDE9FE", color: "#5B21B6", label: "AI Result" },
+  application_update: { icon: Send, bg: "#EEF2FF", color: "#3730A3", label: "Application" },
+  system: { icon: Settings, bg: "#F1F5F9", color: "#475569", label: "System" },
 };
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NotificationsPage() {
-  const [items, setItems] = useState(notifications);
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const unreadCount = items.filter((n) => !n.read).length;
+  const fetchNotifications = () => {
+    api.getNotifications()
+      .then((data) => {
+        setItems(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  };
 
-  const markAllRead = () =>
-    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+  useEffect(() => {
+    fetchNotifications();
+    window.addEventListener("notifications-updated", fetchNotifications);
+    return () => window.removeEventListener("notifications-updated", fetchNotifications);
+  }, []);
 
-  const dismiss = (id: string) =>
-    setItems((prev) => prev.filter((n) => n.id !== id));
+  const unreadCount = items.filter((n) => !n.is_read).length;
 
-  const groups = ["Today", "Earlier"] as const;
+  const markAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      window.dispatchEvent(new Event("notifications-updated"));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const markAsRead = async (id: string) => {
+    try {
+      await api.markNotificationRead(id);
+      setItems((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+      window.dispatchEvent(new Event("notifications-updated"));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  // Group notifications
+  const groupedItems = items.reduce((acc, item) => {
+    const group = isToday(parseISO(item.created_at)) ? "Today" : "Earlier";
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(item);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  const groups = ["Today", "Earlier"];
+
+  if (loading) {
+    return (
+      <div className="flex h-40 items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -95,8 +119,8 @@ export default function NotificationsPage() {
 
       {/* Groups */}
       {groups.map((group) => {
-        const groupItems = items.filter((n) => n.group === group);
-        if (groupItems.length === 0) return null;
+        const groupItems = groupedItems[group];
+        if (!groupItems || groupItems.length === 0) return null;
 
         return (
           <section key={group} className="space-y-2">
@@ -106,22 +130,23 @@ export default function NotificationsPage() {
 
             <Card className="card-shadow border-border/60 overflow-hidden">
               <CardContent className="p-0">
-                {groupItems.map((notif, i) => {
-                  const cfg = notifConfig[notif.type];
+                {groupItems.map((notif: any, i: number) => {
+                  const cfg = notifConfig[notif.type] || notifConfig.system;
                   const Icon = cfg.icon;
 
                   return (
                     <div key={notif.id}>
                       {i > 0 && <Separator />}
                       <div
+                        onClick={() => !notif.is_read && markAsRead(notif.id)}
                         className={`flex items-start gap-4 px-5 py-4 transition-colors group relative ${
-                          !notif.read
-                            ? "bg-[#EEF2FF]/50 hover:bg-[#EEF2FF]/80"
+                          !notif.is_read
+                            ? "bg-[#EEF2FF]/50 hover:bg-[#EEF2FF]/80 cursor-pointer"
                             : "hover:bg-muted/30"
                         }`}
                       >
                         {/* Unread dot */}
-                        {!notif.read && (
+                        {!notif.is_read && (
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 size-1.5 rounded-full bg-[#4F46E5]" />
                         )}
 
@@ -141,27 +166,21 @@ export default function NotificationsPage() {
                           <div className="flex items-start justify-between gap-2">
                             <p
                               className={`text-sm leading-snug ${
-                                !notif.read
+                                !notif.is_read
                                   ? "font-semibold text-foreground"
                                   : "font-medium text-foreground"
                               }`}
                             >
-                              {notif.title}
+                              {cfg.label} Update
                             </p>
                             <div className="flex items-center gap-1 shrink-0">
                               <span className="text-xs tracking-tight text-muted-foreground whitespace-nowrap">
-                                {notif.timestamp}
+                                {formatDistanceToNow(parseISO(notif.created_at), { addSuffix: true })}
                               </span>
-                              <button
-                                onClick={() => dismiss(notif.id)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                              >
-                                <X className="size-3" />
-                              </button>
                             </div>
                           </div>
                           <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">
-                            {notif.body}
+                            {notif.message}
                           </p>
                           {/* Type badge */}
                           <span

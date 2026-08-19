@@ -20,10 +20,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  studentStats,
-  recentActivity,
-} from "@/lib/mock-data";
+
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 
@@ -91,20 +88,55 @@ const statusStyles: Record<string, string> = {
   closed: "bg-muted text-muted-foreground",
 };
 
+type Activity = {
+  id: string;
+  action: string;
+  created_at: string;
+};
+
+type Stats = {
+  applications_sent: number;
+  shortlisted: number;
+  interviews_scheduled: number;
+  offers_received: number;
+  ai_score: number | null;
+};
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
-  const completion = 85; // Placeholder
+  
+  let completion = 0;
+  if (user) {
+    const fields = [
+      user.full_name,
+      user.college,
+      user.branch,
+      user.cgpa,
+      user.skills && user.skills.length > 0,
+      user.resume_url,
+      user.linkedin_url,
+      user.github_url,
+      user.portfolio_url
+    ];
+    const filledCount = fields.filter(Boolean).length;
+    completion = Math.round((filledCount / 9) * 100);
+  }
 
   const [drives, setDrives] = useState<Drive[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [drivesLoading, setDrivesLoading] = useState(true);
 
   useEffect(() => {
-    api.getDrives()
-      .then((data) => setDrives(data.slice(0, 3)))
-      .catch(() => {})
-      .finally(() => setDrivesLoading(false));
+    Promise.all([
+      api.getDrives().then(data => setDrives(data.slice(0, 3))).catch(() => {}),
+      api.getMyStats().then(setStats).catch(() => {}),
+      api.getMyActivity().then(setActivities).catch(() => {})
+    ]).finally(() => {
+      setDrivesLoading(false);
+    });
   }, []);
 
   if (loading || !user) {
@@ -160,7 +192,9 @@ export default function DashboardPage() {
           </div>
           <div>
             <p className="text-xs tracking-tight text-muted-foreground">Your AI Score</p>
-            <p className="text-lg font-bold text-foreground leading-tight">87 / 100</p>
+            <p className="text-lg font-bold text-foreground leading-tight">
+              {stats?.ai_score !== null && stats?.ai_score !== undefined ? `${stats.ai_score} / 100` : "—"}
+            </p>
           </div>
         </div>
       </section>
@@ -168,29 +202,26 @@ export default function DashboardPage() {
       {/* ── Stat cards ── */}
       <section>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {studentStats.map((stat, i) => {
+          {[
+            { label: "Applications Sent", value: stats?.applications_sent ?? 0, icon: "send", bg: "#EEF2FF", color: "#4F46E5" },
+            { label: "Shortlisted", value: stats?.shortlisted ?? 0, icon: "star", bg: "#D1FAE5", color: "#059669" },
+            { label: "Interviews", value: stats?.interviews_scheduled ?? 0, icon: "calendar", bg: "#FEF3C7", color: "#D97706" },
+            { label: "Offers", value: stats?.offers_received ?? 0, icon: "trophy", bg: "#D1FAE5", color: "#10B981" },
+          ].map((stat) => {
             const Icon = statIconMap[stat.icon];
-            const colors = statColors[i];
             return (
               <Card key={stat.label} className="card-shadow hover:card-shadow-hover transition-all duration-200 border-border/60">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between mb-3">
                     <div
                       className="size-9 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: colors.bg }}
+                      style={{ backgroundColor: stat.bg }}
                     >
-                      <Icon className="size-4.5" style={{ color: colors.icon }} />
+                      <Icon className="size-4.5" style={{ color: stat.color }} />
                     </div>
-                    {stat.trendUp !== null && (
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium ${stat.trendUp ? "text-emerald-600" : "text-rose-500"}`}>
-                        {stat.trendUp ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
-                        {stat.trend.split(" ")[0]}
-                      </span>
-                    )}
                   </div>
                   <p className="text-2xl font-bold text-foreground">{stat.value}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
-                  <p className="text-xs tracking-tight text-muted-foreground/70 mt-0.5">{stat.trend}</p>
                 </CardContent>
               </Card>
             );
@@ -313,21 +344,25 @@ export default function DashboardPage() {
           <Card className="card-shadow border-border/60">
             <CardContent className="p-0">
               <div className="divide-y divide-border/60">
-                {recentActivity.map((activity, i) => {
-                  const Icon = activityIconMap[activity.icon];
-                  const colorClass = activityColorMap[activity.color];
-                  return (
+                {activities.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No activity yet — start applying to drives!
+                  </div>
+                ) : (
+                  activities.map((activity) => (
                     <div key={activity.id} className="flex items-start gap-3 px-4 py-3.5 hover:bg-muted/30 transition-colors">
-                      <div className={`size-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${colorClass}`}>
-                        <Icon className="size-3.5" />
+                      <div className="size-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 bg-[#EEF2FF] text-[#3730A3]">
+                        <CheckCircle2 className="size-3.5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground leading-snug">{activity.message}</p>
-                        <p className="text-xs tracking-tight text-muted-foreground mt-0.5">{activity.company} · {activity.timestamp}</p>
+                        <p className="text-xs font-medium text-foreground leading-snug">{activity.action}</p>
+                        <p className="text-xs tracking-tight text-muted-foreground mt-0.5">
+                          {new Date(activity.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "numeric" })}
+                        </p>
                       </div>
                     </div>
-                  );
-                })}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>

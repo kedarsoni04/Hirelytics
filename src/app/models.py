@@ -12,7 +12,7 @@ Usage:
 
 import uuid
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column, String, Text, Boolean, DateTime, ForeignKey,
@@ -80,7 +80,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(SQLEnum(UserRole), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     student = relationship("Student", back_populates="user", uselist=False, cascade="all, delete-orphan")
     company = relationship("Company", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -108,8 +108,9 @@ class Student(Base):
     github_url = Column(String)
     portfolio_url = Column(String)
     profile_photo = Column(String)
+    notification_prefs = Column(JSONB, default=lambda: {"email": True, "inApp": True})
     status = Column(SQLEnum(StudentStatus), default=StudentStatus.active)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="student")
     applications = relationship("Application", back_populates="student", cascade="all, delete-orphan")
@@ -124,8 +125,9 @@ class Company(Base):
     company_name = Column(String, nullable=False)
     industry = Column(String)
     logo_url = Column(String)
+    notification_prefs = Column(JSONB, default=lambda: {"email": True, "inApp": True})
     status = Column(SQLEnum(CompanyStatus), default=CompanyStatus.pending)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="company")
     drives = relationship("Drive", back_populates="company", cascade="all, delete-orphan")
@@ -163,7 +165,7 @@ class Drive(Base):
     selection_stages = Column(JSONB, default=list)  # e.g. ["resume","assessment","ai_interview","hr"]
     status = Column(SQLEnum(DriveStatus), default=DriveStatus.draft)
     deadline = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     company = relationship("Company", back_populates="drives")
     applications = relationship("Application", back_populates="drive", cascade="all, delete-orphan")
@@ -178,8 +180,8 @@ class Application(Base):
     drive_id = Column(UUID(as_uuid=False), ForeignKey("drives.id"), nullable=False)
 
     current_stage = Column(SQLEnum(ApplicationStage), default=ApplicationStage.applied)
-    applied_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    applied_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     student = relationship("Student", back_populates="applications")
     drive = relationship("Drive", back_populates="applications")
@@ -204,7 +206,7 @@ class Scorecard(Base):
     overall_ai_score = Column(Numeric(5, 2))
     ai_summary = Column(Text)          # one-line insight, e.g. "Strong technical fit"
     ai_insights = Column(JSONB, default=list)  # bullet-point highlights
-    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     application = relationship("Application", back_populates="scorecard")
 
@@ -230,7 +232,7 @@ class AssessmentSubmission(Base):
     answers = Column(JSONB, default=list)       # [{question_id, selected_option}]
     score = Column(Numeric(5, 2))
     proctor_flags = Column(JSONB, default=list)  # [{type: 'tab_switch', timestamp}]
-    submitted_at = Column(DateTime, default=datetime.utcnow)
+    submitted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     application = relationship("Application", back_populates="assessment_submission")
 
@@ -264,7 +266,7 @@ class Notification(Base):
     type = Column(String, nullable=False)   # 'application_update', 'ai_result_ready', etc.
     message = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="notifications")
 
@@ -277,4 +279,4 @@ class ActivityLog(Base):
 
     action = Column(String, nullable=False)
     log_metadata = Column(JSONB, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

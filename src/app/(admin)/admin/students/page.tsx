@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Search, MoreHorizontal, ShieldCheck, Ban, Flag, Download, Eye, GraduationCap, CheckCircle2, X, Mail, BookOpen, Award } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search, MoreHorizontal, ShieldCheck, Ban, Flag, Download, Eye, GraduationCap, CheckCircle2, X, Mail, BookOpen, Award, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DataTable, Column } from "@/components/ui/DataTable";
-import { adminStudents } from "@/lib/mock-data";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,12 +12,26 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { api } from "@/lib/api";
+
+interface StudentItem {
+  id: string;
+  name: string;
+  college: string;
+  branch: string;
+  cgpa: number | null;
+  status: string;
+  applications: number;
+  joined: string;
+  email: string;
+}
 
 export default function ManageStudentsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [students, setStudents] = useState(adminStudents);
-  const [selectedStudent, setSelectedStudent] = useState<(typeof adminStudents)[0] | null>(null);
+  const [students, setStudents] = useState<StudentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedStudent, setSelectedStudent] = useState<StudentItem | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -26,37 +39,82 @@ export default function ManageStudentsPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleClearFlag = (id: string) => {
-    setStudents(prev => prev.map(s => s.id === id ? { ...s, status: "Active" } : s));
-    if (selectedStudent?.id === id) {
-      setSelectedStudent(prev => prev ? { ...prev, status: "Active" } : null);
+  const loadStudents = async () => {
+    try {
+      const data = await api.getAdminStudents();
+      setStudents(data || []);
+    } catch (e) {
+      console.error("Failed to load students:", e);
+    } finally {
+      setLoading(false);
     }
-    showToast("Student flag cleared successfully.");
   };
 
-  const handleFlag = (id: string) => {
-    setStudents(prev => prev.map(s => s.id === id ? { ...s, status: "Flagged" } : s));
-    if (selectedStudent?.id === id) {
-      setSelectedStudent(prev => prev ? { ...prev, status: "Flagged" } : null);
+  useEffect(() => {
+    loadStudents();
+  }, []);
+
+  const handleClearFlag = async (id: string) => {
+    try {
+      await api.updateStudentStatus(id, "active");
+      setStudents(prev => prev.map(s => s.id === id ? { ...s, status: "Active" } : s));
+      if (selectedStudent?.id === id) {
+        setSelectedStudent(prev => prev ? { ...prev, status: "Active" } : null);
+      }
+      showToast("Student flag cleared successfully.");
+    } catch (e) {
+      console.error("Failed to clear flag:", e);
     }
-    showToast("Student account flagged for review.");
   };
 
-  const handleSuspend = (id: string) => {
-    setStudents(prev => prev.map(s => s.id === id ? { ...s, status: "Suspended" } : s));
-    if (selectedStudent?.id === id) {
-      setSelectedStudent(prev => prev ? { ...prev, status: "Suspended" } : null);
+  const handleFlag = async (id: string) => {
+    try {
+      await api.updateStudentStatus(id, "flagged");
+      setStudents(prev => prev.map(s => s.id === id ? { ...s, status: "Flagged" } : s));
+      if (selectedStudent?.id === id) {
+        setSelectedStudent(prev => prev ? { ...prev, status: "Flagged" } : null);
+      }
+      showToast("Student account flagged for review.");
+    } catch (e) {
+      console.error("Failed to flag student:", e);
     }
-    showToast("Student account suspended.");
+  };
+
+  const handleSuspend = async (id: string) => {
+    try {
+      await api.updateStudentStatus(id, "suspended");
+      setStudents(prev => prev.map(s => s.id === id ? { ...s, status: "Suspended" } : s));
+      if (selectedStudent?.id === id) {
+        setSelectedStudent(prev => prev ? { ...prev, status: "Suspended" } : null);
+      }
+      showToast("Student account suspended.");
+    } catch (e) {
+      console.error("Failed to suspend student:", e);
+    }
   };
 
   const handleExportList = () => {
+    if (students.length === 0) return;
+    const headers = "ID,Name,College,Branch,CGPA,Status,Applications,Joined,Email\n";
+    const rows = students.map(s => `"${s.id}","${s.name}","${s.college}","${s.branch}","${s.cgpa ?? ''}","${s.status}","${s.applications}","${s.joined}","${s.email}"`).join("\n");
+    const blob = new Blob([headers + rows], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `students-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
     showToast("Exporting student directory as CSV...");
   };
 
-  const handleBulkVerify = () => {
+  const handleBulkVerify = async () => {
+    const flagged = students.filter(s => s.status === "Flagged");
+    for (const s of flagged) {
+      try {
+        await api.updateStudentStatus(s.id, "active");
+      } catch (e) {}
+    }
     setStudents(prev => prev.map(s => s.status === "Flagged" ? { ...s, status: "Active" } : s));
-    showToast("Bulk verified all active student records.");
+    showToast("Bulk verified all flagged student records.");
   };
 
   const filtered = students.filter((s) => {
@@ -88,7 +146,7 @@ export default function ManageStudentsPage() {
     );
   };
 
-  const columns: Column<typeof adminStudents[0]>[] = [
+  const columns: Column<StudentItem>[] = [
     {
       header: "Student Name",
       cell: (s) => (
@@ -106,7 +164,7 @@ export default function ManageStudentsPage() {
     {
       header: "CGPA",
       cell: (s) => (
-        <span className="font-medium text-foreground">{s.cgpa}</span>
+        <span className="font-medium text-foreground">{s.cgpa !== null ? s.cgpa : "—"}</span>
       ),
     },
     {
@@ -152,6 +210,14 @@ export default function ManageStudentsPage() {
       ),
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -233,11 +299,11 @@ export default function ManageStudentsPage() {
                 <p className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
                   <Award className="size-3.5 text-[#4F46E5]" /> Academic CGPA
                 </p>
-                <p className="text-lg font-bold text-foreground mt-1">{selectedStudent.cgpa} / 10.0</p>
+                <p className="text-lg font-bold text-foreground mt-1">{selectedStudent.cgpa !== null ? `${selectedStudent.cgpa} / 10.0` : "N/A"}</p>
               </div>
               <div className="p-3 rounded-xl bg-muted/40 border border-border/60">
                 <p className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
-                  <BookOpen className="size-3.5 text-[#4F46E5]" /> Active Drives
+                  <BookOpen className="size-3.5 text-[#4F46E5]" /> Total Applications
                 </p>
                 <p className="text-lg font-bold text-foreground mt-1">{selectedStudent.applications} Applications</p>
               </div>
@@ -248,7 +314,7 @@ export default function ManageStudentsPage() {
               <div className="flex items-center gap-2 text-muted-foreground p-2.5 rounded-lg bg-muted/30 border border-border/40">
                 <Mail className="size-3.5 text-muted-foreground shrink-0" />
                 <span className="truncate">
-                  {selectedStudent.name.toLowerCase().replace(/\s+/g, ".")}@{selectedStudent.college.toLowerCase().replace(/[^a-z0-9]/g, "")}.edu
+                  {selectedStudent.email || `${selectedStudent.name.toLowerCase().replace(/\s+/g, ".")}@${selectedStudent.college.toLowerCase().replace(/[^a-z0-9]/g, "")}.edu`}
                 </span>
               </div>
             </div>
@@ -304,4 +370,3 @@ export default function ManageStudentsPage() {
     </div>
   );
 }
-
