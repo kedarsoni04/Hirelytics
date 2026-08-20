@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, DataError, StatementError, DBAPIError
 import os
 
 from app.database import init_db
@@ -28,13 +28,37 @@ app.add_middleware(
 )
 
 # Exception handlers
+@app.exception_handler(DataError)
+async def data_error_handler(request: Request, exc: DataError):
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "Invalid ID or parameter format provided."},
+    )
+
+@app.exception_handler(StatementError)
+async def statement_error_handler(request: Request, exc: StatementError):
+    import traceback
+    traceback.print_exc()
+    # Check if the error is due to invalid data format (e.g. invalid UUID)
+    if isinstance(exc.orig, (DataError,)) or "invalid input syntax for type uuid" in str(exc).lower():
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "Invalid ID or parameter format provided."},
+        )
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "Bad request syntax or parameter."},
+    )
+
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     import traceback
     traceback.print_exc()
     return JSONResponse(
         status_code=500,
-        content={"message": "An internal database error occurred.", "detail": str(exc)},
+        content={"detail": "A database error occurred. Please try again later."},
     )
 
 @app.exception_handler(Exception)
@@ -43,7 +67,7 @@ async def general_exception_handler(request: Request, exc: Exception):
     traceback.print_exc()
     return JSONResponse(
         status_code=500,
-        content={"message": "An internal server error occurred.", "detail": str(exc)},
+        content={"detail": "An internal server error occurred."},
     )
 
 # Initialize database tables

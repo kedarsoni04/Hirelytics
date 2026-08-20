@@ -80,7 +80,7 @@ const companyNavItems: NavGroup[] = [
       { icon: LayoutDashboard, label: "Dashboard", href: "/company/dashboard" },
       { icon: Briefcase, label: "My Drives", href: "/company/drives", badge: "4" },
       { icon: Kanban, label: "Offer Pipeline", href: "/company/pipeline" },
-      { icon: Users, label: "Candidates", href: "/company/drives/drv-001/candidates" },
+      { icon: Users, label: "Candidates", href: "/company/pipeline" },
       { icon: Calendar, label: "Interviews", href: "/company/interviews" },
       { icon: BarChart2, label: "Analytics", href: "/company/analytics" },
     ],
