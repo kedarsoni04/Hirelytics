@@ -67,13 +67,13 @@ class SignupPayload(schemas.UserSignup):
 @router.post("/signup", response_model=schemas.Token)
 def signup(payload: SignupPayload, db: Session = Depends(get_db)):
     # Check if user exists
-    existing_user = db.query(models.User).filter(models.User.email == payload.email).first()
+    existing_user = db.query(models.User).filter(models.User.email == payload.email.lower()).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     # Create the User row
     new_user = models.User(
-        email=payload.email,
+        email=payload.email.lower(),
         password_hash=hash_password(payload.password),
         role=payload.role
     )
@@ -138,7 +138,7 @@ def signup(payload: SignupPayload, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=schemas.Token)
 def login(payload: schemas.UserLogin, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == payload.email).first()
+    user = db.query(models.User).filter(models.User.email == payload.email.lower()).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
