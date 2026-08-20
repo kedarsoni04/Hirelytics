@@ -17,9 +17,11 @@ def upload_resume(file_bytes: bytes, filename: str, student_id: str) -> str:
     Uses resource_type="raw" which is required for non-image files like PDFs.
     Returns the secure_url of the uploaded file.
     """
-    # Strip extension from filename to use as public_id base
-    base_name = os.path.splitext(filename)[0]
-    public_id = f"hirelytics/resumes/{student_id}/{base_name}"
+    # Clean base name (alphanumeric, hyphens, underscores) and ensure .pdf extension
+    import re
+    raw_base = os.path.splitext(filename)[0]
+    clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', raw_base).strip('_') or "resume"
+    public_id = f"hirelytics/resumes/{student_id}/{clean_name}.pdf"
 
     result = cloudinary.uploader.upload(
         file_bytes,

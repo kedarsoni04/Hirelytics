@@ -236,7 +236,12 @@ export default function CandidateScorecardPage() {
                     CGPA: {student.cgpa !== null && student.cgpa !== undefined ? `${student.cgpa} / 10` : "N/A"}
                   </span>
                   {student.resume_url ? (
-                    <a href={student.resume_url} target="_blank" rel="noreferrer">
+                    <a
+                      href={student.resume_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={`${(student.full_name || "candidate").replace(/[^a-zA-Z0-9_-]/g, "_")}_resume.pdf`}
+                    >
                       <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
                         <Download className="size-3" /> Download Resume
                       </Button>
