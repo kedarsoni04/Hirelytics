@@ -1,10 +1,11 @@
 from datetime import datetime
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db
 from app.routers.auth import get_current_user, get_current_role
-from app.services.ai_service import analyze_interview, transcribe_audio
+from app.services.ai_service import analyze_interview, transcribe_audio, generate_interview_questions, extract_text_from_resume_url
 from fastapi import UploadFile, File
 
 router = APIRouter()
@@ -33,12 +34,18 @@ def create_interview(
 
     questions = payload.questions
     if not questions:
-        questions = [
-            "Tell me about a challenging technical project you worked on and how you overcame the obstacles.",
-            "Describe a time you had to learn a new technology quickly. How did you approach it?",
-            "How do you handle disagreements with team members on technical decisions?",
-            "What is your approach to testing and ensuring code quality?"
-        ]
+        resume_text = ""
+        if getattr(application.student, "resume_url", None):
+            resume_text = extract_text_from_resume_url(application.student.resume_url)
+        if not resume_text:
+            resume_text = ", ".join(application.student.skills) if application.student.skills else "No skills listed"
+            
+        questions = generate_interview_questions(
+            job_title=application.drive.title,
+            job_description=application.drive.description or "",
+            required_skills=application.drive.eligible_branches or [],
+            resume_text=resume_text
+        )
 
     interview = models.Interview(
         application_id=payload.application_id,
@@ -46,6 +53,15 @@ def create_interview(
         scheduled_at=datetime.utcnow(),
     )
     db.add(interview)
+
+    if application.student and application.student.user_id:
+        notif = models.Notification(
+            user_id=application.student.user_id,
+            type="interview",
+            message=f"Interview scheduled for {application.drive.title}"
+        )
+        db.add(notif)
+
     db.commit()
     db.refresh(interview)
     return interview
@@ -121,14 +137,22 @@ def schedule_candidate_interview(
     if interview:
         interview.scheduled_at = payload.scheduled_at
     else:
+        resume_text = ""
+        if getattr(application.student, "resume_url", None):
+            resume_text = extract_text_from_resume_url(application.student.resume_url)
+        if not resume_text:
+            resume_text = ", ".join(application.student.skills) if application.student.skills else "No skills listed"
+            
+        generated_questions = generate_interview_questions(
+            job_title=application.drive.title,
+            job_description=application.drive.description or "",
+            required_skills=application.drive.eligible_branches or [],
+            resume_text=resume_text
+        )
+        
         interview = models.Interview(
             application_id=payload.application_id,
-            questions=[
-                "Tell me about a challenging technical project you worked on and how you overcame the obstacles.",
-                "Describe a time you had to learn a new technology quickly. How did you approach it?",
-                "How do you handle disagreements with team members on technical decisions?",
-                "What is your approach to testing and ensuring code quality?"
-            ],
+            questions=generated_questions,
             scheduled_at=payload.scheduled_at,
         )
         db.add(interview)
@@ -189,7 +213,7 @@ def submit_interview(
     if interview.completed_at is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Interview already submitted")
 
-    sentiment_data = analyze_interview(payload.transcript)
+    sentiment_data = analyze_interview(payload.transcript, interview.questions)
 
     interview.transcript = payload.transcript
     interview.sentiment_data = sentiment_data
@@ -211,6 +235,22 @@ def submit_interview(
         message=f"Your AI interview for {interview.application.drive.title} was analyzed"
     )
     db.add(notif)
+
+    # Notify Company
+    if (
+        interview.application
+        and interview.application.drive
+        and interview.application.drive.company
+        and interview.application.drive.company.user_id
+    ):
+        student_name = student.full_name or "A candidate"
+        drive_title = interview.application.drive.title or "campus drive"
+        notif_company = models.Notification(
+            user_id=interview.application.drive.company.user_id,
+            type="interview",
+            message=f"{student_name} completed their AI interview for {drive_title}"
+        )
+        db.add(notif_company)
 
     db.commit()
     db.refresh(interview)

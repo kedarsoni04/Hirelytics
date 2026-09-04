@@ -157,6 +157,7 @@ class ScorecardOut(BaseModel):
     resume_match_score: Optional[float]
     assessment_score: Optional[float]
     communication_score: Optional[float]
+    technical_interview_score: Optional[float]
     overall_ai_score: Optional[float]
     ai_summary: Optional[str]
     ai_insights: List[str]
@@ -210,7 +211,13 @@ class AssessmentSubmissionOut(BaseModel):
 
 class InterviewCreate(BaseModel):
     application_id: str
-    questions: List[str]
+    questions: List[Any]
+
+
+class InterviewScheduleRequest(BaseModel):
+    application_id: str
+    scheduled_at: datetime
+    notes: Optional[str] = None
 
 
 class InterviewSubmit(BaseModel):
@@ -222,7 +229,7 @@ class InterviewOut(BaseModel):
 
     id: str
     application_id: str
-    questions: List[str]
+    questions: List[Any]
     transcript: Optional[str]
     video_url: Optional[str]
     sentiment_data: Dict[str, Any]

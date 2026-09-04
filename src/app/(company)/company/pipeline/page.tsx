@@ -29,6 +29,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 
 type StageKey = "shortlisted" | "interviewed" | "offered" | "hired";
 
@@ -92,6 +93,7 @@ export default function PipelinePage() {
       setApplications((prev) =>
         prev.map((app) => (app.id === appId ? { ...app, current_stage: toDbStage } : app))
       );
+      dispatchNotificationsUpdated();
     } catch (err: any) {
       console.error("[Pipeline] Stage update error:", err);
       alert(err.message || "Failed to update stage");

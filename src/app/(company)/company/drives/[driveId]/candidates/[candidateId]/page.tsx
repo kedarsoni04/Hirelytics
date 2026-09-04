@@ -20,6 +20,9 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  Terminal,
+  ShieldAlert,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { CircularProgress } from "@/components/ui/circular-progress";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 
 // ── Stage config ──────────────────────────────────────────────────────────────
 const stageConfig: Record<string, { label: string; bg: string; color: string }> = {
@@ -65,6 +69,21 @@ function formatDate(iso: string | null | undefined) {
   }
 }
 
+function formatDateTime(iso: string | null | undefined) {
+  if (!iso) return "N/A";
+  try {
+    return new Date(iso).toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export default function CandidateScorecardPage() {
   const params = useParams();
   const driveId = params?.driveId as string;
@@ -72,12 +91,17 @@ export default function CandidateScorecardPage() {
 
   const [application, setApplication] = useState<any | null>(null);
   const [scorecard, setScorecard] = useState<any | null>(null);
+  const [submission, setSubmission] = useState<any | null>(null); // assessment submission
+  const [interviewExists, setInterviewExists] = useState<boolean | null>(null); // null = checking
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [generating, setGenerating] = useState(false);
+  const [schedulingInterview, setSchedulingInterview] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionMessageType, setActionMessageType] = useState<"error" | "success">("error");
+  const [interviewSuccessMsg, setInterviewSuccessMsg] = useState<string | null>(null);
 
   const loadData = async () => {
     if (!candidateId) return;
@@ -87,12 +111,28 @@ export default function CandidateScorecardPage() {
       const appData = await api.getApplication(candidateId);
       setApplication(appData);
 
+      // Fetch scorecard (optional)
       try {
         const scData = await api.getScorecard(candidateId);
         setScorecard(scData);
-      } catch (scErr) {
-        // Scorecard not generated yet, which is expected before generation
+      } catch {
         setScorecard(null);
+      }
+
+      // Fetch assessment submission (optional)
+      try {
+        const subData = await api.getAssessmentSubmission(candidateId);
+        setSubmission(subData);
+      } catch {
+        setSubmission(null);
+      }
+
+      // Check if interview already exists
+      try {
+        await api.getApplicationInterview(candidateId);
+        setInterviewExists(true);
+      } catch {
+        setInterviewExists(false);
       }
     } catch (err: any) {
       console.error("[Candidate Scorecard] Load error:", err);
@@ -112,9 +152,11 @@ export default function CandidateScorecardPage() {
       setActionMessage(null);
       await api.updateApplicationStage(candidateId, newStage);
       setApplication((prev: any) => ({ ...prev, current_stage: newStage }));
+      dispatchNotificationsUpdated();
     } catch (err: any) {
       console.error("[Candidate Action] Error:", err);
       setActionMessage(err.message || "Failed to update candidate stage");
+      setActionMessageType("error");
     } finally {
       setActionLoading(false);
     }
@@ -132,8 +174,31 @@ export default function CandidateScorecardPage() {
     } catch (err: any) {
       console.error("[Generate Scorecard] Error:", err);
       setActionMessage(err.message || "Failed to generate scorecard. Complete Assessment & Interview first.");
+      setActionMessageType("error");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleScheduleInterview = async () => {
+    try {
+      setSchedulingInterview(true);
+      setActionMessage(null);
+      setInterviewSuccessMsg(null);
+      // POST /interviews — backend auto-generates questions via Gemini
+      await api.createInterview({ application_id: candidateId, questions: [] });
+      setInterviewExists(true);
+      setInterviewSuccessMsg("Interview scheduled — candidate will be notified.");
+      // Refresh app stage
+      const updatedApp = await api.getApplication(candidateId);
+      setApplication(updatedApp);
+      dispatchNotificationsUpdated();
+    } catch (err: any) {
+      console.error("[Schedule Interview] Error:", err);
+      setActionMessage(err.message || "Failed to schedule interview. Please try again.");
+      setActionMessageType("error");
+    } finally {
+      setSchedulingInterview(false);
     }
   };
 
@@ -174,7 +239,14 @@ export default function CandidateScorecardPage() {
   const resumeScore = scorecard?.resume_match_score ?? null;
   const assessmentScore = scorecard?.assessment_score ?? null;
   const commScore = scorecard?.communication_score ?? null;
+  const techScore = scorecard?.technical_interview_score ?? null;
   const insights: string[] = scorecard?.ai_insights || [];
+
+  // Interview button logic
+  const canScheduleInterview =
+    stage === "assessment" || stage === "ai_interview" || submission !== null;
+  const interviewButtonDisabled =
+    schedulingInterview || interviewExists === null || interviewExists === true;
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -192,10 +264,31 @@ export default function CandidateScorecardPage() {
         <span className="font-medium text-foreground">{student.full_name || "Candidate"}</span>
       </div>
 
+      {/* Action message banner */}
       {actionMessage && (
-        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center justify-between">
+        <div
+          className={cn(
+            "p-3 border text-xs rounded-xl flex items-center justify-between",
+            actionMessageType === "error"
+              ? "bg-rose-50 border-rose-200 text-rose-700"
+              : "bg-emerald-50 border-emerald-200 text-emerald-700"
+          )}
+        >
           <span>{actionMessage}</span>
           <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setActionMessage(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+
+      {/* Interview success banner */}
+      {interviewSuccessMsg && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="size-4 shrink-0" />
+            <span>{interviewSuccessMsg}</span>
+          </div>
+          <Button size="sm" variant="ghost" className="h-6 text-xs shrink-0" onClick={() => setInterviewSuccessMsg(null)}>
             Dismiss
           </Button>
         </div>
@@ -306,6 +399,44 @@ export default function CandidateScorecardPage() {
                 </>
               )}
 
+              {/* ── Schedule AI Interview Button ── */}
+              <Separator className="my-1" />
+
+              {interviewExists === null ? (
+                // Still checking
+                <Button disabled size="sm" className="w-full text-xs gap-1.5 opacity-60">
+                  <Loader2 className="size-3.5 animate-spin" /> Checking interview…
+                </Button>
+              ) : interviewExists ? (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#EEF2FF] border border-[#C7D2FE]">
+                  <Bot className="size-4 text-[#4F46E5] shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-[#3730A3]">Interview Scheduled ✓</p>
+                    <p className="text-[10px] text-[#6366F1]">Candidate can now take the AI interview.</p>
+                  </div>
+                </div>
+              ) : canScheduleInterview ? (
+                <Button
+                  id="schedule-ai-interview-btn"
+                  onClick={handleScheduleInterview}
+                  disabled={interviewButtonDisabled}
+                  size="sm"
+                  className="w-full gap-1.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold"
+                >
+                  {schedulingInterview ? (
+                    <><Loader2 className="size-3.5 animate-spin" /> Generating AI questions…</>
+                  ) : (
+                    <><Bot className="size-3.5" /> Schedule AI Interview</>
+                  )}
+                </Button>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-muted/60 border border-border text-center">
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    AI Interview unlocks once candidate completes the assessment.
+                  </p>
+                </div>
+              )}
+
               {/* Generate Scorecard Button */}
               {!scorecard && (
                 <Button
@@ -314,13 +445,9 @@ export default function CandidateScorecardPage() {
                   className="w-full gap-1.5 brand-gradient text-white text-xs font-semibold mt-1"
                 >
                   {generating ? (
-                    <>
-                      <Loader2 className="size-3.5 animate-spin" /> Generating...
-                    </>
+                    <><Loader2 className="size-3.5 animate-spin" /> Generating...</>
                   ) : (
-                    <>
-                      <Sparkles className="size-3.5" /> Generate Scorecard
-                    </>
+                    <><Sparkles className="size-3.5" /> Generate Scorecard</>
                   )}
                 </Button>
               )}
@@ -328,6 +455,64 @@ export default function CandidateScorecardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Assessment Submission Card ── */}
+      {submission && (
+        <Card className="card-shadow border-border/60">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <ClipboardCheck className="size-4 text-[#059669]" />
+              <h3 className="text-sm font-bold text-foreground">Assessment Submission</h3>
+              <span className="ml-auto text-xs text-muted-foreground">
+                Submitted {formatDateTime(submission.submitted_at)}
+              </span>
+            </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+              {/* Score */}
+              <div className="flex items-center gap-4">
+                <div className="size-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col items-center justify-center shrink-0">
+                  <span className="text-xl font-bold text-emerald-700">
+                    {submission.score !== null && submission.score !== undefined
+                      ? `${Math.round(submission.score)}%`
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Score</p>
+                  <p className="text-xs text-muted-foreground">MCQ assessment auto-graded</p>
+                </div>
+              </div>
+
+              {/* Proctor Flags */}
+              {submission.proctor_flags && submission.proctor_flags.length > 0 ? (
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 mb-2 text-amber-700">
+                    <ShieldAlert className="size-3.5" />
+                    <span className="text-xs font-bold">
+                      {submission.proctor_flags.length} Proctor Flag{submission.proctor_flags.length > 1 ? "s" : ""} Detected
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {submission.proctor_flags.map((flag: any, idx: number) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-medium"
+                      >
+                        {typeof flag === "string" ? flag : flag.type || JSON.stringify(flag)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-emerald-600">
+                  <CheckCircle2 className="size-3.5" />
+                  <span className="text-xs font-medium">No proctor flags — clean submission</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Main AI Content Grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -449,12 +634,12 @@ export default function CandidateScorecardPage() {
               </CardContent>
             </Card>
 
-            {/* Communication Score */}
+            {/* Communication Score (Soft Skills) */}
             <Card className="border-border/60 bg-muted/20">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <MessageSquare className="size-4 text-[#D97706]" /> Communication
+                    <MessageSquare className="size-4 text-[#D97706]" /> Soft Skills
                   </div>
                   <span className="text-lg font-bold text-[#D97706]">
                     {commScore !== null ? `${Math.round(commScore)}%` : "—"}
@@ -467,7 +652,30 @@ export default function CandidateScorecardPage() {
                   />
                 </div>
                 <p className="text-xs tracking-tight text-muted-foreground mt-2">
-                  AI speech & sentiment analysis evaluation.
+                  AI behavioral & communication evaluation.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Technical Interview Score */}
+            <Card className="border-border/60 bg-muted/20">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Terminal className="size-4 text-[#0284C7]" /> Technical Interview
+                  </div>
+                  <span className="text-lg font-bold text-[#0284C7]">
+                    {techScore !== null ? `${Math.round(techScore)}%` : "—"}
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#0EA5E9] rounded-full transition-all"
+                    style={{ width: `${techScore ?? 0}%` }}
+                  />
+                </div>
+                <p className="text-xs tracking-tight text-muted-foreground mt-2">
+                  AI technical depth & reasoning evaluation.
                 </p>
               </CardContent>
             </Card>

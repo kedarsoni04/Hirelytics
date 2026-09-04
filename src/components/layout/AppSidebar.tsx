@@ -31,6 +31,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 import { useAuth } from "@/lib/auth-context";
+import { useUnreadCount } from "@/lib/use-unread-count";
 
 type NavItem = {
   icon: React.ElementType;
@@ -67,7 +68,7 @@ const studentNavItems: NavGroup[] = [
     items: [
       { icon: User, label: "My Profile", href: "/profile" },
       { icon: FileText, label: "Resume Builder", href: "/resume" },
-      { icon: Bell, label: "Notifications", href: "/notifications", badge: "3" },
+      { icon: Bell, label: "Notifications", href: "/notifications", badge: "__UNREAD__" },
       { icon: Settings, label: "Settings", href: "/settings" },
     ],
   },
@@ -88,7 +89,7 @@ const companyNavItems: NavGroup[] = [
   {
     group: "Account",
     items: [
-      { icon: Bell, label: "Notifications", href: "/company/notifications", badge: "3" },
+      { icon: Bell, label: "Notifications", href: "/company/notifications", badge: "__UNREAD__" },
       { icon: Settings, label: "Settings", href: "/company/settings" },
       { icon: HelpCircle, label: "Help & Support", href: "/company/help" },
     ],
@@ -123,6 +124,8 @@ export default function AppSidebar({ role }: AppSidebarProps) {
   const pathname = usePathname();
 
   const { user, logout } = useAuth();
+  const unreadCount = useUnreadCount(role !== "admin");
+  const unreadBadge = unreadCount > 0 ? (unreadCount > 99 ? "99+" : String(unreadCount)) : undefined;
   
   const navItems = role === "admin" ? adminNavItems : role === "student" ? studentNavItems : companyNavItems;
 
@@ -241,7 +244,7 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                   if (role === "student") {
                     return (
                       <Link
-                        key={item.href}
+                        key={`${group.group}-${item.label}`}
                         href={item.href}
                         title={collapsed ? item.label : undefined}
                         className={`flex items-center gap-3 h-9 rounded-lg transition-all duration-150 mb-0.5 mx-2
@@ -264,7 +267,7 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                               <span className={`text-xs tracking-tight font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
                                   isAI ? "bg-violet-500 text-white" : "bg-sidebar-foreground/10 text-sidebar-foreground/60"
                                 }`}>
-                                {item.badge}
+                                {item.badge === "__UNREAD__" ? (unreadBadge ?? null) : item.badge}
                               </span>
                             )}
                           </>
@@ -273,7 +276,7 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                     );
                   } else {
                     return (
-                      <li key={item.href}>
+                      <li key={`${group.group}-${item.label}`}>
                         <Link
                           href={item.href}
                           title={collapsed ? item.label : undefined}
@@ -289,7 +292,7 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                               <span className="flex-1 truncate">{item.label}</span>
                               {item.badge && (
                                 <span className="text-xs tracking-tight font-semibold px-1.5 py-0.5 rounded-full bg-sidebar-accent text-sidebar-foreground/60">
-                                  {item.badge}
+                                  {item.badge === "__UNREAD__" ? (unreadBadge ?? null) : item.badge}
                                 </span>
                               )}
                             </>

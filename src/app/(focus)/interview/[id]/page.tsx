@@ -24,6 +24,7 @@ import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/prog
 import CameraBox from "@/components/interview/CameraBox";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 
 type AppState = "idle" | "recording" | "analyzing" | "done";
 
@@ -228,7 +229,8 @@ export default function InterviewPage() {
       try {
         setSubmitting(true);
         const fullTranscript = questions
-          .map((qText: string, i: number) => {
+          .map((q: any, i: number) => {
+            const qText = typeof q === "string" ? q : q.question || q.text || `Question ${i + 1}`;
             const ans = recordedTranscripts[i] || "No response recorded.";
             return `Question ${i + 1}: ${qText}\nAnswer: ${ans}`;
           })
@@ -238,6 +240,7 @@ export default function InterviewPage() {
           transcript: fullTranscript,
         });
         setIsCompleted(true);
+        dispatchNotificationsUpdated();
       } catch (err: any) {
         console.error("[Submit Interview] Error:", err);
         alert(err.message || "Failed to submit interview.");
@@ -397,7 +400,7 @@ export default function InterviewPage() {
             <CardContent className="p-6 md:p-8 space-y-6">
               <div className="flex justify-between items-start gap-4">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs tracking-tight font-bold bg-[#EEF2FF] text-[#3730A3] uppercase tracking-wider">
-                  Technical & Behavioral
+                  {typeof currentQ === "string" ? "Interview Question" : (currentQ.category || "General").replace(/_/g, " ")}
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs tracking-tight font-medium bg-muted text-muted-foreground">
                   <Clock className="size-3" /> 2 min recommended

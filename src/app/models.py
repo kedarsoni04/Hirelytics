@@ -202,7 +202,8 @@ class Scorecard(Base):
 
     resume_match_score = Column(Numeric(5, 2))
     assessment_score = Column(Numeric(5, 2))
-    communication_score = Column(Numeric(5, 2))
+    communication_score = Column(Numeric(5, 2)) # Used for Soft Skills
+    technical_interview_score = Column(Numeric(5, 2))
     overall_ai_score = Column(Numeric(5, 2))
     ai_summary = Column(Text)          # one-line insight, e.g. "Strong technical fit"
     ai_insights = Column(JSONB, default=list)  # bullet-point highlights

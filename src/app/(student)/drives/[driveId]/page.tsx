@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
+import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -148,6 +149,7 @@ export default function DriveDetailPage() {
       setApplyError(null);
       await api.applyToDrive(drive.id);
       setApplySuccess(true);
+      dispatchNotificationsUpdated();
     } catch (err: any) {
       console.error("[Drive Detail] Apply error:", err);
       setApplyError(err.message || "Failed to apply");

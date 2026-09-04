@@ -92,6 +92,8 @@ function normaliseUser(raw: any): User {
   };
 }
 
+import { Loader2 } from "lucide-react";
+
 // ── Provider ───────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -123,28 +125,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     Promise.resolve().then(() => fetchUser());
   }, []);
 
+  const isAuthRoute = pathname === "/login" || pathname === "/signup";
+  const isPublicRoute = isAuthRoute || pathname === "/design-system";
+  const isStudentRoute = ["/dashboard", "/applications", "/resume", "/progress", "/resources", "/drives", "/profile", "/notifications", "/settings"].some(
+    (route) => pathname?.startsWith(route)
+  );
+  const isCompanyRoute = pathname?.startsWith("/company");
+  const isAdminRoute = pathname?.startsWith("/admin");
+
   useEffect(() => {
     if (loading) return;
 
-    const isStudentRoute = ["/dashboard", "/applications", "/resume", "/progress", "/resources", "/drives", "/profile", "/notifications", "/settings"].some(
-      (route) => pathname?.startsWith(route)
-    );
-    const isCompanyRoute = pathname?.startsWith("/company");
-    const isAdminRoute = pathname?.startsWith("/admin");
-    const isAuthRoute = pathname === "/login" || pathname === "/signup";
-    const isPublicRoute = pathname === "/" || isAuthRoute || pathname === "/design-system";
-
     if (!user && !isPublicRoute) {
-      router.push("/login");
+      router.replace("/login");
     } else if (user) {
       if (user.role === "student" && (isCompanyRoute || isAdminRoute)) {
-        router.push("/dashboard");
+        router.replace("/dashboard");
       } else if (user.role === "company" && (isStudentRoute || isAdminRoute)) {
-        router.push("/company/dashboard");
+        router.replace("/company/dashboard");
       } else if (user.role === "admin" && (isStudentRoute || isCompanyRoute)) {
-        router.push("/admin/dashboard");
+        router.replace("/admin/dashboard");
       } else if (isAuthRoute || pathname === "/") {
-        router.push(
+        router.replace(
           user.role === "student" 
             ? "/dashboard" 
             : user.role === "company" 
@@ -153,21 +155,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         );
       }
     }
-  }, [user, loading, pathname, router]);
+  }, [user, loading, pathname, router, isPublicRoute, isAuthRoute, isStudentRoute, isCompanyRoute, isAdminRoute]);
 
   const logout = () => {
     clearToken();
     setUser(null);
-    router.push("/login");
+    router.replace("/login");
   };
 
   const updateUser = (partial: Partial<User>) => {
     setUser((prev) => (prev ? { ...prev, ...partial } : prev));
   };
 
+  // Determine whether to render children or a loading state
+  const shouldRenderChildren = () => {
+    if (loading) {
+      // If public auth route and no token present, allow immediate render
+      if (isAuthRoute && typeof window !== "undefined" && !getToken()) {
+        return true;
+      }
+      return false;
+    }
+
+    // After loading completes:
+    if (!user) {
+      // Unauthenticated: only allow public routes
+      return isPublicRoute;
+    }
+
+    // Authenticated: do not show login/signup or root page while redirect is in flight
+    if (isAuthRoute || pathname === "/") {
+      return false;
+    }
+
+    // Role boundary checks
+    if (user.role === "student" && (isCompanyRoute || isAdminRoute)) {
+      return false;
+    }
+    if (user.role === "company" && (isStudentRoute || isAdminRoute)) {
+      return false;
+    }
+    if (user.role === "admin" && (isStudentRoute || isCompanyRoute)) {
+      return false;
+    }
+
+    return true;
+  };
+
   return (
     <AuthContext.Provider value={{ user, loading, logout, refreshUser: fetchUser, updateUser }}>
-      {children}
+      {shouldRenderChildren() ? (
+        children
+      ) : (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+          <Loader2 className="size-8 animate-spin text-[#4F46E5]" />
+          <p className="text-sm text-muted-foreground mt-3 font-medium">Authenticating...</p>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }

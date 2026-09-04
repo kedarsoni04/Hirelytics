@@ -11,6 +11,7 @@ import {
   Sparkles,
   Loader2,
   User,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +27,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 
 interface ScheduledInterview {
   id: string;
@@ -63,6 +65,7 @@ export default function InterviewSchedulerPage() {
   const [pendingCandidates, setPendingCandidates] = useState<CandidateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const [timeSlot, setTimeSlot] = useState("10:00 AM");
   const [interviewNotes, setInterviewNotes] = useState("");
@@ -136,6 +139,7 @@ export default function InterviewSchedulerPage() {
 
     try {
       setSubmitting(true);
+      setScheduleError(null);
       
       // Parse selected time into ISO string
       const [time, period] = timeSlot.split(" ");
@@ -156,11 +160,13 @@ export default function InterviewSchedulerPage() {
       setScheduleModalOpen(false);
       setSelectedCandidate(null);
       setInterviewNotes("");
+      dispatchNotificationsUpdated();
       
       // Refresh list
       await loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to schedule interview:", error);
+      setScheduleError(error?.message || "Failed to schedule interview. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -443,28 +449,37 @@ export default function InterviewSchedulerPage() {
             </div>
           </div>
 
-          <DialogFooter className="sm:justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={submitting}
-              onClick={() => setScheduleModalOpen(false)}
-              className="text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={submitting}
-              onClick={handleSchedule}
-              className="brand-gradient text-white text-xs font-semibold"
-            >
-              {submitting ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}
-              Confirm Schedule
-            </Button>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            {scheduleError && (
+              <div className="flex items-start gap-2 w-full p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
+                <span>{scheduleError}</span>
+              </div>
+            )}
+            <div className="flex gap-2 justify-end w-full">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={submitting}
+                onClick={() => { setScheduleModalOpen(false); setScheduleError(null); }}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={submitting}
+                onClick={handleSchedule}
+                className="brand-gradient text-white text-xs font-semibold"
+              >
+                {submitting ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}
+                Confirm Schedule
+              </Button>
+            </div>
           </DialogFooter>
+
         </DialogContent>
       </Dialog>
 

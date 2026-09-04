@@ -6,7 +6,6 @@ import {
   Send,
   Star,
   FileText,
-  CheckCircle2,
   XCircle,
   Sparkles,
   Clock,
@@ -25,6 +24,26 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 
 type AppStage = "applied" | "ai_screened" | "assessment" | "interview" | "shortlisted" | "offer" | "rejected" | "withdrawn";
+
+interface ApplicationDrive {
+  id?: string;
+  title?: string;
+  company_name?: string | null;
+  package?: number | string | null;
+  location?: string | null;
+  status?: string | null;
+}
+
+interface Application {
+  id: string;
+  student_id: string;
+  drive_id: string;
+  current_stage: AppStage;
+  applied_at: string;
+  updated_at?: string | null;
+  drive?: ApplicationDrive | null;
+  overall_ai_score?: number | null;
+}
 
 
 // ── Stage config ───────────────────────────────────────────────────────────────
@@ -101,7 +120,7 @@ const stageConfig: Record<
 
 const summaryStages: AppStage[] = ["applied", "ai_screened", "assessment", "interview", "shortlisted", "offer", "rejected"];
 
-function getStageCounts(applications: any[]) {
+function getStageCounts(applications: Application[]) {
   return summaryStages.map((stage) => ({
     stage,
     count: applications.filter((a) => a.current_stage === stage).length,
@@ -110,7 +129,7 @@ function getStageCounts(applications: any[]) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function companyDisplay(companyName: string | null) {
+function companyDisplay(companyName?: string | null) {
   const name = companyName || "Unknown";
   const palette = [
     "#4F46E5", "#0EA5E9", "#10B981", "#F59E0B", "#EF4444",
@@ -123,7 +142,8 @@ function companyDisplay(companyName: string | null) {
   };
 }
 
-function formatDate(iso: string) {
+function formatDate(iso?: string | null) {
+  if (!iso) return "--";
   try {
     return new Date(iso).toLocaleDateString("en-IN", {
       day: "numeric",
@@ -138,7 +158,7 @@ function formatDate(iso: string) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ApplicationsPage() {
-  const [applications, setApplications] = useState<any[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,9 +168,9 @@ export default function ApplicationsPage() {
         setLoading(true);
         const data = await api.getMyApplications();
         setApplications(data);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Failed to fetch applications:", err);
-        setError(err.message || "Failed to load applications.");
+        setError(err instanceof Error ? err.message : "Failed to load applications.");
       } finally {
         setLoading(false);
       }
@@ -171,6 +191,24 @@ export default function ApplicationsPage() {
   const activeCount = applications.filter(
     (a) => !["rejected", "withdrawn"].includes(a.current_stage)
   ).length;
+
+  // ── AI Insight (real data) ──────────────────────────────────────────────────
+  const appsWithScore = applications.filter(
+    (a) => typeof a.overall_ai_score === "number" && a.overall_ai_score > 0
+  );
+  const hasInsight = appsWithScore.length > 0;
+  const bestApp = hasInsight
+    ? appsWithScore.reduce((best, a) =>
+        (a.overall_ai_score ?? 0) > (best.overall_ai_score ?? 0) ? a : best
+      )
+    : null;
+  const bestScore = bestApp?.overall_ai_score ?? 0;
+  const avgScore = hasInsight
+    ? Math.round(
+        appsWithScore.reduce((sum, a) => sum + (a.overall_ai_score ?? 0), 0) /
+          appsWithScore.length
+      )
+    : 0;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -252,7 +290,6 @@ export default function ApplicationsPage() {
           {applications.map((app) => {
             const stage = (app.current_stage || "applied") as AppStage;
             const cfg = stageConfig[stage] || stageConfig["applied"];
-            const Icon = cfg.icon;
             const isActive = !["rejected", "withdrawn"].includes(stage);
             const { initials, color } = companyDisplay(app.drive?.company_name);
 
@@ -299,7 +336,7 @@ export default function ApplicationsPage() {
                 <div className="hidden md:flex flex-col justify-center items-center">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-[#EDE9FE] text-[#5B21B6]">
                     <Sparkles className="size-3" />
-                    --
+                    {typeof app.overall_ai_score === "number" ? Math.round(app.overall_ai_score) : "--"}
                   </span>
                 </div>
 
@@ -336,7 +373,7 @@ export default function ApplicationsPage() {
                     <span className="text-xs tracking-tight text-muted-foreground">{formatDate(app.applied_at)}</span>
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs tracking-tight font-bold bg-[#EDE9FE] text-[#5B21B6]">
                       <Sparkles className="size-2.5" />
-                      --
+                      {typeof app.overall_ai_score === "number" ? Math.round(app.overall_ai_score) : "--"}
                     </span>
                   </div>
                   {isActive && (
@@ -354,36 +391,43 @@ export default function ApplicationsPage() {
       </Card>
 
       {/* ── Progress insight ── */}
-      <Card className="card-shadow border-l-4 border-l-violet-500 border-border/60 ai-glow">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-3">
-            <div className="size-9 rounded-lg ai-gradient flex items-center justify-center shrink-0">
-              <TrendingUp className="size-4 text-white" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-semibold text-foreground">AI Application Insight</p>
-                <span className="text-xs tracking-tight font-medium px-1.5 py-0.5 rounded bg-[#EDE9FE] text-[#5B21B6]">
-                  GENERATED
-                </span>
+      {hasInsight && bestApp && (
+        <Card className="card-shadow border-l-4 border-l-violet-500 border-border/60 ai-glow">
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="size-9 rounded-lg ai-gradient flex items-center justify-center shrink-0">
+                <TrendingUp className="size-4 text-white" />
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                You are in the <strong>top 15%</strong> of applicants for the Google SWE Intern role. Your AI score of{" "}
-                <strong className="text-[#5B21B6]">92</strong> is above the median (76). Focus on the upcoming Technical
-                Round — brush up on Graph algorithms and Dynamic Programming.
-              </p>
-              <div className="flex gap-2 mt-3">
-                <Button size="sm" className="ai-gradient text-white text-xs h-7 px-3 hover:opacity-90">
-                  <Sparkles className="size-3 mr-1" /> Prep with AI
-                </Button>
-                <Button size="sm" variant="ghost" className="text-xs h-7">
-                  View All Insights
-                </Button>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-sm font-semibold text-foreground">AI Application Insight</p>
+                  <span className="text-xs tracking-tight font-medium px-1.5 py-0.5 rounded bg-[#EDE9FE] text-[#5B21B6]">
+                    LIVE EVALUATION
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Your top performance is for the <strong>{bestApp.drive?.title || "Applied Role"}</strong>{" "}
+                  {bestApp.drive?.company_name ? `at ${bestApp.drive?.company_name}` : ""} with an AI score of{" "}
+                  <strong className="text-[#5B21B6]">{Math.round(bestScore)}</strong>
+                  {appsWithScore.length > 1
+                    ? ` (average across your evaluations: ${avgScore}).`
+                    : "."}{" "}
+                  {bestScore >= 80
+                    ? "Strong candidacy! Review interview and assessment insights to keep momentum."
+                    : "Continue practicing technical and communication questions to boost your overall ranking."}
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Link href={`/drives/${bestApp.drive_id}`}>
+                    <Button size="sm" className="ai-gradient text-white text-xs h-7 px-3 hover:opacity-90">
+                      <Sparkles className="size-3 mr-1" /> View Drive Details
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

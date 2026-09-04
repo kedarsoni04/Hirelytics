@@ -100,10 +100,15 @@ export const api = {
 
   // Assessments
   getDriveAssessment: (driveId: string) => fetchAPI(`/assessments/drive/${driveId}`, { method: 'GET' }),
+  createAssessment: (data: { drive_id: string; questions: any[]; duration_mins: number }) =>
+    fetchAPI('/assessments', { method: 'POST', body: JSON.stringify(data) }),
   submitAssessment: (data: any) => fetchAPI('/assessments/submit', { method: 'POST', body: JSON.stringify(data) }),
+  getAssessmentSubmission: (applicationId: string) => fetchAPI(`/assessments/submission/${applicationId}`, { method: 'GET' }),
 
   // Interviews
   getApplicationInterview: (applicationId: string) => fetchAPI(`/interviews/application/${applicationId}`, { method: 'GET' }),
+  createInterview: (data: { application_id: string; questions: any[] }) =>
+    fetchAPI('/interviews', { method: 'POST', body: JSON.stringify(data) }),
   submitInterview: (interviewId: string, data: any) => fetchAPI(`/interviews/${interviewId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
   getCompanyScheduledInterviews: () => fetchAPI('/interviews/company/scheduled', { method: 'GET' }),
   scheduleInterview: (data: { application_id: string; scheduled_at: string; notes?: string }) =>

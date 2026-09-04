@@ -20,6 +20,7 @@ import OptionCard from "@/components/assessment/OptionCard";
 import QuestionPalette from "@/components/assessment/QuestionPalette";
 import CountdownTimer from "@/components/assessment/CountdownTimer";
 import { api } from "@/lib/api";
+import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 import type { QuestionStatus } from "@/lib/types";
 
 export default function AssessmentPage() {
@@ -231,6 +232,7 @@ export default function AssessmentPage() {
       });
 
       setSubmissionResult(res);
+      dispatchNotificationsUpdated();
     } catch (err: any) {
       console.error("[Submit Assessment] Error:", err);
       alert(err.message || "Failed to submit assessment.");

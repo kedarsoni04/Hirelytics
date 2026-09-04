@@ -15,13 +15,29 @@ import {
   Loader2,
   AlertCircle,
   ArrowLeft,
+  ClipboardCheck,
+  CheckCircle2,
+  Plus,
+  Trash2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 
 // ── Stage config ──────────────────────────────────────────────────────────────
 
@@ -86,6 +102,20 @@ const stageFilterLabels = [
   { value: "rejected", label: "Rejected" },
 ];
 
+// ── Assessment question shape ─────────────────────────────────────────────────
+
+interface MCQQuestion {
+  question: string;
+  options: [string, string, string, string];
+  correct_option: number; // 0–3
+}
+
+function makeBlankQuestion(): MCQQuestion {
+  return { question: "", options: ["", "", "", ""], correct_option: 0 };
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function CandidateListPage() {
   const router = useRouter();
   const params = useParams();
@@ -100,6 +130,14 @@ export default function CandidateListPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Assessment state
+  const [assessmentExists, setAssessmentExists] = useState<boolean | null>(null); // null = loading
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [questions, setQuestions] = useState<MCQQuestion[]>([makeBlankQuestion()]);
+  const [durationMins, setDurationMins] = useState(30);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const loadData = async () => {
     if (!driveId) return;
@@ -120,8 +158,20 @@ export default function CandidateListPage() {
     }
   };
 
+  const checkAssessment = async () => {
+    if (!driveId) return;
+    try {
+      await api.getDriveAssessment(driveId);
+      setAssessmentExists(true);
+    } catch {
+      // 404 means no assessment yet
+      setAssessmentExists(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
+    checkAssessment();
   }, [driveId]);
 
   const toggleSort = (field: SortField) => {
@@ -139,6 +189,7 @@ export default function CandidateListPage() {
       setApplications((prev) =>
         prev.map((a) => (a.id === appId ? { ...a, current_stage: newStage } : a))
       );
+      dispatchNotificationsUpdated();
     } catch (err: any) {
       console.error("[Candidate List] Stage change error:", err);
       alert(err.message || "Failed to update candidate stage");
@@ -146,6 +197,81 @@ export default function CandidateListPage() {
       setUpdatingId(null);
     }
   };
+
+  // ── Assessment question helpers ──────────────────────────────────────────────
+
+  const openCreateModal = () => {
+    setQuestions([makeBlankQuestion()]);
+    setDurationMins(30);
+    setPublishError(null);
+    setCreateModalOpen(true);
+  };
+
+  const addQuestion = () => setQuestions((prev) => [...prev, makeBlankQuestion()]);
+
+  const removeQuestion = (idx: number) =>
+    setQuestions((prev) => prev.filter((_, i) => i !== idx));
+
+  const updateQuestion = (idx: number, field: keyof MCQQuestion, value: any) => {
+    setQuestions((prev) =>
+      prev.map((q, i) => {
+        if (i !== idx) return q;
+        if (field === "options") return { ...q, options: value };
+        return { ...q, [field]: value };
+      })
+    );
+  };
+
+  const updateOption = (qIdx: number, optIdx: number, value: string) => {
+    setQuestions((prev) =>
+      prev.map((q, i) => {
+        if (i !== qIdx) return q;
+        const newOpts = [...q.options] as [string, string, string, string];
+        newOpts[optIdx] = value;
+        return { ...q, options: newOpts };
+      })
+    );
+  };
+
+  const handlePublish = async () => {
+    // Validate
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      if (!q.question.trim()) {
+        setPublishError(`Question ${i + 1} text is required.`);
+        return;
+      }
+      for (let o = 0; o < 4; o++) {
+        if (!q.options[o].trim()) {
+          setPublishError(`Question ${i + 1}, Option ${String.fromCharCode(65 + o)} is required.`);
+          return;
+        }
+      }
+    }
+
+    try {
+      setPublishing(true);
+      setPublishError(null);
+      await api.createAssessment({
+        drive_id: driveId,
+        questions: questions.map((q) => ({
+          question: q.question.trim(),
+          options: q.options.map((o) => o.trim()),
+          correct_option: q.correct_option,
+        })),
+        duration_mins: durationMins,
+      });
+      setAssessmentExists(true);
+      setCreateModalOpen(false);
+      dispatchNotificationsUpdated();
+    } catch (err: any) {
+      setPublishError(err.message || "Failed to create assessment.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // ── Render guards ─────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -204,6 +330,8 @@ export default function CandidateListPage() {
     );
   };
 
+  const OPTION_LABELS = ["A", "B", "C", "D"];
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -221,7 +349,27 @@ export default function CandidateListPage() {
             {applications.length} candidate{applications.length !== 1 ? "s" : ""} applied for this role
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* Assessment button / chip */}
+          {assessmentExists === null ? (
+            <div className="w-36 h-8 rounded-lg bg-muted animate-pulse" />
+          ) : assessmentExists ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+              <CheckCircle2 className="size-3.5" />
+              Assessment Created ✓
+            </span>
+          ) : (
+            <Button
+              id="create-assessment-btn"
+              onClick={openCreateModal}
+              size="sm"
+              className="gap-1.5 bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold shadow-sm"
+            >
+              <ClipboardCheck className="size-3.5" />
+              Create Assessment
+            </Button>
+          )}
+
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg ai-gradient text-white text-xs font-semibold">
             <Sparkles className="size-3.5" />
             Realtime Applications
@@ -416,6 +564,149 @@ export default function CandidateListPage() {
           );
         })}
       </Card>
+
+      {/* ── Create Assessment Modal ── */}
+      <Dialog open={createModalOpen} onOpenChange={(open) => !publishing && setCreateModalOpen(open)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 gap-5">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <ClipboardCheck className="size-5 text-[#4F46E5]" />
+              Create Assessment
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Build an MCQ assessment for <strong className="text-foreground">{drive?.title}</strong>. Candidates will see questions without the correct answers highlighted.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Duration */}
+          <div className="flex items-center gap-3">
+            <Label className="text-xs font-semibold shrink-0">Duration (minutes)</Label>
+            <Input
+              id="assessment-duration"
+              type="number"
+              min={5}
+              max={180}
+              value={durationMins}
+              onChange={(e) => setDurationMins(Math.max(5, parseInt(e.target.value) || 30))}
+              className="w-24 h-8 text-xs"
+            />
+          </div>
+
+          <Separator />
+
+          {/* Questions */}
+          <div className="space-y-5">
+            {questions.map((q, qIdx) => (
+              <div
+                key={qIdx}
+                className="p-4 rounded-xl border border-border bg-muted/20 space-y-3 relative group"
+              >
+                {/* Question header */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#4F46E5]">Question {qIdx + 1}</span>
+                  {questions.length > 1 && (
+                    <button
+                      onClick={() => removeQuestion(qIdx)}
+                      disabled={publishing}
+                      className="size-6 rounded flex items-center justify-center text-muted-foreground hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                      title="Remove question"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Question text */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Question text *</Label>
+                  <textarea
+                    id={`question-${qIdx}-text`}
+                    value={q.question}
+                    onChange={(e) => updateQuestion(qIdx, "question", e.target.value)}
+                    placeholder="Enter your question here…"
+                    rows={2}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 resize-none"
+                  />
+                </div>
+
+                {/* Options */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {OPTION_LABELS.map((label, oIdx) => (
+                    <div key={oIdx} className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`q-${qIdx}-correct`}
+                        id={`q-${qIdx}-opt-${oIdx}`}
+                        checked={q.correct_option === oIdx}
+                        onChange={() => updateQuestion(qIdx, "correct_option", oIdx)}
+                        className="accent-[#4F46E5] shrink-0"
+                        title="Mark as correct"
+                      />
+                      <span className="text-xs font-bold text-muted-foreground w-4 shrink-0">{label}</span>
+                      <Input
+                        value={q.options[oIdx]}
+                        onChange={(e) => updateOption(qIdx, oIdx, e.target.value)}
+                        placeholder={`Option ${label}`}
+                        className="h-8 text-xs flex-1"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Select the radio button next to the correct option.
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Add Question */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addQuestion}
+            disabled={publishing}
+            className="gap-1.5 text-xs border-dashed border-[#4F46E5]/40 text-[#4F46E5] hover:bg-[#EEF2FF]"
+          >
+            <Plus className="size-3.5" /> Add Question
+          </Button>
+
+          {/* Error */}
+          {publishError && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700">
+              <AlertCircle className="size-4 shrink-0 mt-0.5" />
+              <p className="text-xs">{publishError}</p>
+              <button onClick={() => setPublishError(null)} className="ml-auto shrink-0">
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCreateModalOpen(false)}
+              disabled={publishing}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              id="publish-assessment-btn"
+              onClick={handlePublish}
+              disabled={publishing}
+              size="sm"
+              className="bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold gap-1.5"
+            >
+              {publishing ? (
+                <><Loader2 className="size-3.5 animate-spin" /> Publishing…</>
+              ) : (
+                <><ClipboardCheck className="size-3.5" /> Publish Assessment</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

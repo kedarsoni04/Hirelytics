@@ -38,6 +38,7 @@ class StudentDetailForApplication(BaseModel):
 class ApplicationDetailOut(schemas.ApplicationOut):
     drive: Optional[DriveDetailForApplication] = None
     student: Optional[StudentDetailForApplication] = None
+    overall_ai_score: Optional[float] = None
 
 
 def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
@@ -65,6 +66,13 @@ def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
             "status": app_obj.student.status,
         }
 
+    scorecard_obj = getattr(app_obj, "scorecard", None)
+    overall_ai_score = (
+        float(scorecard_obj.overall_ai_score)
+        if scorecard_obj and scorecard_obj.overall_ai_score is not None
+        else None
+    )
+
     return {
         "id": app_obj.id,
         "student_id": app_obj.student_id,
@@ -74,6 +82,7 @@ def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
         "updated_at": app_obj.updated_at,
         "drive": drive_info,
         "student": student_info,
+        "overall_ai_score": overall_ai_score,
     }
 
 
@@ -159,7 +168,11 @@ def get_my_applications(
 
     applications = (
         db.query(models.Application)
-        .options(joinedload(models.Application.drive).joinedload(models.Drive.company), joinedload(models.Application.student))
+        .options(
+            joinedload(models.Application.drive).joinedload(models.Drive.company),
+            joinedload(models.Application.student),
+            joinedload(models.Application.scorecard),
+        )
         .filter(models.Application.student_id == student.id)
         .order_by(models.Application.applied_at.desc())
         .all()

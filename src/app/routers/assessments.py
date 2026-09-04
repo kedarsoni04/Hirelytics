@@ -147,6 +147,19 @@ def submit_assessment(
     )
     db.add(notif)
 
+    # Notify Company
+    if (
+        application.drive
+        and application.drive.company
+        and application.drive.company.user_id
+    ):
+        notif_company = models.Notification(
+            user_id=application.drive.company.user_id,
+            type="application_update",
+            message=f"New assessment submission from {student.full_name} for {application.drive.title}"
+        )
+        db.add(notif_company)
+
     # Move application stage
     application.current_stage = models.ApplicationStage.assessment
     db.commit()

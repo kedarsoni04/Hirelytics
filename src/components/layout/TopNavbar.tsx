@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, Sparkles, Bell, ChevronDown, User, Settings, LogOut } from "lucide-react";
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { useAuth } from "@/lib/auth-context";
-import { api } from "@/lib/api";
+import { useUnreadCount } from "@/lib/use-unread-count";
 
 interface TopNavbarProps {
   role: "student" | "company" | "admin";
@@ -36,21 +36,7 @@ const adminPageTitles: Record<string, string> = {
 export default function TopNavbar({ role, title }: TopNavbarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    if (!user || role === "admin") return;
-    
-    const fetchUnread = () => {
-      api.getUnreadNotificationCount()
-        .then((res: any) => setUnreadCount(res.count))
-        .catch(() => {});
-    };
-
-    fetchUnread();
-    window.addEventListener("notifications-updated", fetchUnread);
-    return () => window.removeEventListener("notifications-updated", fetchUnread);
-  }, [user, role]);
+  const unreadCount = useUnreadCount(role !== "admin");
 
   let profile = { name: "Guest", initials: "G", email: "" };
   if (user) {
