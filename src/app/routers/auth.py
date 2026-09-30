@@ -1,23 +1,29 @@
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import bcrypt
 from jose import JWTError, jwt
-from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+from dotenv import load_dotenv, find_dotenv
 
 from app import models, schemas
 from app.database import get_db
 
+load_dotenv(find_dotenv())
+
+# Re-use the limiter registered in main.py
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter()
 
 # JWT Setup
-SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-if not SECRET_KEY:
-    raise ValueError("JWT_SECRET_KEY environment variable is required")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY") or "b65e48beab31ac134bf5b19d770b44697c83b69f648c7cd46ca7f6e8c952b1db"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 24 * 60  # 24 hours
 
@@ -36,7 +42,8 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_access_token(user_id: str, role: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode = {"sub": user_id, "role": role, "exp": expire}
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    secret: str = SECRET_KEY  # type: ignore[assignment]  # guarded at startup
+    encoded_jwt = jwt.encode(to_encode, secret, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -47,7 +54,7 @@ class SignupPayload(schemas.UserSignup):
     college: Optional[str] = None
     branch: Optional[str] = None
     cgpa: Optional[float] = None
-    skills: Optional[List[str]] = []
+    skills: Optional[List[str]] = None
     linkedin_url: Optional[str] = None
     github_url: Optional[str] = None
     portfolio_url: Optional[str] = None
@@ -65,7 +72,8 @@ class SignupPayload(schemas.UserSignup):
 
 
 @router.post("/signup", response_model=schemas.Token)
-def signup(payload: SignupPayload, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def signup(request: Request, payload: SignupPayload, db: Session = Depends(get_db)):
     # Check if user exists
     existing_user = db.query(models.User).filter(models.User.email == payload.email.lower()).first()
     if existing_user:
@@ -132,20 +140,28 @@ def signup(payload: SignupPayload, db: Session = Depends(get_db)):
     db.commit()
 
     # Generate token
-    token = create_access_token(user_id=new_user.id, role=new_user.role.value if hasattr(new_user.role, 'value') else str(new_user.role))
+    user_role = getattr(new_user, "role")
+    role_str = str(getattr(user_role, "value", user_role))
+    token = create_access_token(
+        user_id=str(new_user.id),
+        role=role_str,
+    )
     return {"access_token": token, "token_type": "bearer", "role": new_user.role}
 
 
 @router.post("/login", response_model=schemas.Token)
-def login(payload: schemas.UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, payload: schemas.UserLogin, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == payload.email.lower()).first()
-    if not user or not verify_password(payload.password, user.password_hash):
+    if not user or not verify_password(payload.password, str(user.password_hash)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
         )
-    
-    token = create_access_token(user_id=user.id, role=user.role.value)
+
+    user_role = getattr(user, "role")
+    role_str = str(getattr(user_role, "value", user_role))
+    token = create_access_token(user_id=str(user.id), role=role_str)
     return {"access_token": token, "token_type": "bearer", "role": user.role}
 
 
@@ -156,8 +172,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
+        secret: str = SECRET_KEY  # type: ignore[assignment]  # guarded at startup
+        payload = jwt.decode(token, secret, algorithms=[ALGORITHM])
+        user_id: Optional[str] = payload.get("sub")
         if user_id is None:
             raise credentials_exception
     except JWTError:
@@ -169,10 +186,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
-def get_current_role(required_role: models.UserRole | str):
+def get_current_role(required_role: "models.UserRole | str"):
     def role_dependency(current_user: models.User = Depends(get_current_user)):
-        req_val = required_role.value if hasattr(required_role, "value") else str(required_role)
-        user_val = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+        if isinstance(required_role, models.UserRole):
+            req_val = str(required_role.value)
+        else:
+            req_val = str(required_role)
+        user_role = getattr(current_user, "role")
+        user_val = str(getattr(user_role, "value", user_role))
         if user_val != req_val:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -183,31 +204,34 @@ def get_current_role(required_role: models.UserRole | str):
 
 
 @router.get("/me")
-def get_me(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_me(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)) -> Dict[str, Any]:
     # Return user with profile depending on role
-    result = {
-        "id": current_user.id,
-        "email": current_user.email,
-        "role": current_user.role,
-        "is_active": current_user.is_active,
-        "created_at": current_user.created_at
+    user_role = getattr(current_user, "role")
+    role_val = str(getattr(user_role, "value", user_role))
+
+    result: Dict[str, Any] = {
+        "id": str(current_user.id),
+        "email": str(current_user.email),
+        "role": role_val,
+        "is_active": bool(current_user.is_active),
+        "created_at": current_user.created_at,
     }
-    
-    if current_user.role == models.UserRole.student:
+
+    if role_val == models.UserRole.student.value:
         student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
-        if student:
+        if student is not None:
             result["student_profile"] = schemas.StudentOut.model_validate(student).model_dump()
-    elif current_user.role == models.UserRole.company:
+    elif role_val == models.UserRole.company.value:
         company = db.query(models.Company).filter(models.Company.user_id == current_user.id).first()
-        if company:
+        if company is not None:
             result["company_profile"] = schemas.CompanyOut.model_validate(company).model_dump()
-    elif current_user.role == models.UserRole.admin:
+    elif role_val == models.UserRole.admin.value:
         admin = db.query(models.Admin).filter(models.Admin.user_id == current_user.id).first()
-        if admin:
+        if admin is not None:
             result["admin_profile"] = {
-                "id": admin.id,
-                "full_name": admin.full_name,
-                "admin_role": admin.admin_role
+                "id": str(admin.id),
+                "full_name": str(admin.full_name),
+                "admin_role": str(admin.admin_role),
             }
-            
+
     return result

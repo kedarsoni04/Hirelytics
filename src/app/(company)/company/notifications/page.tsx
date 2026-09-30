@@ -28,8 +28,16 @@ const notifConfig: Record<string, { icon: React.ElementType; bg: string; color: 
   system: { icon: Settings, bg: "#F1F5F9", color: "#475569", label: "System" },
 };
 
+type CompanyNotification = {
+  id: string;
+  type: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+};
+
 export default function CompanyNotificationsPage() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<CompanyNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchNotifications = () => {
@@ -78,7 +86,7 @@ export default function CompanyNotificationsPage() {
     if (!acc[group]) acc[group] = [];
     acc[group].push(item);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, CompanyNotification[]>);
 
   const groups = ["Today", "Earlier"];
 
@@ -127,7 +135,7 @@ export default function CompanyNotificationsPage() {
 
             <Card className="card-shadow border-border/60 overflow-hidden">
               <CardContent className="p-0">
-                {groupItems.map((notif: any, i: number) => {
+                {groupItems.map((notif: CompanyNotification, i: number) => {
                   const cfg = notifConfig[notif.type] || notifConfig.system;
                   const Icon = cfg.icon;
 
@@ -205,7 +213,7 @@ export default function CompanyNotificationsPage() {
           </div>
           <p className="text-sm font-medium text-foreground">No notifications</p>
           <p className="text-xs text-muted-foreground mt-1">
-            You're all caught up.
+            You&apos;re all caught up.
           </p>
         </div>
       )}

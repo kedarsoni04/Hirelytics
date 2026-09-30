@@ -114,6 +114,38 @@ function makeBlankQuestion(): MCQQuestion {
   return { question: "", options: ["", "", "", ""], correct_option: 0 };
 }
 
+type CandidateApplication = {
+  id: string;
+  drive_id: string;
+  student_id: string;
+  current_stage: string;
+  applied_at: string;
+  student?: {
+    id?: string;
+    full_name?: string;
+    email?: string;
+    college?: string;
+    branch?: string;
+    cgpa?: number;
+    skills?: string[];
+    resume_url?: string;
+  };
+  score?: number;
+  match_score?: number;
+  resume_match_score?: number;
+  assessment_score?: number;
+  [key: string]: unknown;
+};
+
+type DriveData = {
+  id: string;
+  title: string;
+  status: string;
+  package?: string;
+  location?: string;
+  [key: string]: unknown;
+};
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function CandidateListPage() {
@@ -121,8 +153,8 @@ export default function CandidateListPage() {
   const params = useParams();
   const driveId = params?.driveId as string;
 
-  const [drive, setDrive] = useState<any | null>(null);
-  const [applications, setApplications] = useState<any[]>([]);
+  const [drive, setDrive] = useState<DriveData | null>(null);
+  const [applications, setApplications] = useState<CandidateApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -150,9 +182,9 @@ export default function CandidateListPage() {
       ]);
       setDrive(driveData);
       setApplications(appsData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Candidate List] Error fetching data:", err);
-      setError(err.message || "Failed to load candidates");
+      setError(err instanceof Error ? err.message : "Failed to load candidates");
     } finally {
       setLoading(false);
     }
@@ -190,9 +222,9 @@ export default function CandidateListPage() {
         prev.map((a) => (a.id === appId ? { ...a, current_stage: newStage } : a))
       );
       dispatchNotificationsUpdated();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Candidate List] Stage change error:", err);
-      alert(err.message || "Failed to update candidate stage");
+      alert(err instanceof Error ? err.message : "Failed to update candidate stage");
     } finally {
       setUpdatingId(null);
     }
@@ -212,11 +244,11 @@ export default function CandidateListPage() {
   const removeQuestion = (idx: number) =>
     setQuestions((prev) => prev.filter((_, i) => i !== idx));
 
-  const updateQuestion = (idx: number, field: keyof MCQQuestion, value: any) => {
+  const updateQuestion = (idx: number, field: keyof MCQQuestion, value: string | string[] | number) => {
     setQuestions((prev) =>
       prev.map((q, i) => {
         if (i !== idx) return q;
-        if (field === "options") return { ...q, options: value };
+        if (field === "options" && Array.isArray(value)) return { ...q, options: value as [string, string, string, string] };
         return { ...q, [field]: value };
       })
     );
@@ -264,8 +296,8 @@ export default function CandidateListPage() {
       setAssessmentExists(true);
       setCreateModalOpen(false);
       dispatchNotificationsUpdated();
-    } catch (err: any) {
-      setPublishError(err.message || "Failed to create assessment.");
+    } catch (err: unknown) {
+      setPublishError(err instanceof Error ? err.message : "Failed to create assessment.");
     } finally {
       setPublishing(false);
     }

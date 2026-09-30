@@ -29,6 +29,7 @@ import { Separator } from "@/components/ui/separator";
 import CheckableCard from "@/components/ui/CheckableCard";
 import ChipInput from "@/components/ui/ChipInput";
 import { api } from "@/lib/api";
+import { dispatchDrivesUpdated } from "@/lib/use-nav-counts";
 
 const BRANCH_SUGGESTIONS = [
   "CSE", "ECE", "IT", "EEE", "Mechanical", "Civil",
@@ -163,7 +164,7 @@ export default function PostDrivePage() {
       .filter((s) => stages[s.id])
       .map((s) => s.id);
 
-    const payload: Record<string, any> = {
+    const payload: Record<string, unknown> = {
       title: title.trim(),
       description: buildDescription() || null,
       package: packageStr.trim() || null,
@@ -186,12 +187,14 @@ export default function PostDrivePage() {
         setSuccessId(created.id);
       }
 
+      dispatchDrivesUpdated();
+
       // Navigate to company dashboard after 1.5s
       setTimeout(() => {
         router.push("/company/dashboard");
       }, 1500);
-    } catch (err: any) {
-      setError(err.message || "Failed to create drive");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to create drive");
     } finally {
       setSubmitting(false);
     }

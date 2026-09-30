@@ -13,3 +13,4 @@ groq
 cloudinary
 pdfplumber
 requests
+slowapi

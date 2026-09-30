@@ -75,7 +75,7 @@ export default function SignupPage() {
 
     try {
       setLoading(true);
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         email: trimmedEmail,
         password,
         role,
@@ -94,8 +94,8 @@ export default function SignupPage() {
       const result = await api.signup(payload);
       setToken(result.access_token);
       await refreshUser(); // Context will redirect based on role
-    } catch (err: any) {
-      setError(err.message || "Failed to sign up");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to sign up");
     } finally {
       setLoading(false);
     }

@@ -5,6 +5,9 @@ import json
 import io
 from typing import Dict, Any
 
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(usecwd=True))
+
 from app import models
 from google import genai
 from groq import Groq
@@ -42,13 +45,13 @@ def _clean_json_text(text: str) -> str:
 
 def _call_llm_json(prompt: str) -> Any:
     """
-    Attempts to call Gemini first, then falls back to Groq models ('openai/gpt-oss-20b', 'groq/compound-mini').
+    Attempts to call Gemini first, then falls back to Groq models ('openai/gpt-oss-20b').
     Returns parsed JSON object/dict/list, or None if all fail.
     """
     # 1. Try Gemini
     gemini_client = get_gemini_client()
     if gemini_client:
-        for gemini_model in ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]:
+        for gemini_model in ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash"]:
             try:
                 response = gemini_client.models.generate_content(
                     model=gemini_model,
@@ -57,14 +60,14 @@ def _call_llm_json(prompt: str) -> Any:
                 if response and response.text:
                     cleaned = _clean_json_text(response.text)
                     return json.loads(cleaned)
-            except Exception as e:
+            except Exception:
                 # Silently try next model/provider
                 continue
 
     # 2. Try Groq
     groq_client = get_groq_client()
     if groq_client:
-        groq_models = ["openai/gpt-oss-20b", "groq/compound-mini"]
+        groq_models = ["openai/gpt-oss-20b"]
         for g_model in groq_models:
             try:
                 completion = groq_client.chat.completions.create(
@@ -78,8 +81,10 @@ def _call_llm_json(prompt: str) -> Any:
                     response_format={"type": "json_object"},
                     temperature=0.2,
                 )
-                response_text = completion.choices[0].message.content.strip()
-                cleaned = _clean_json_text(response_text)
+                content = completion.choices[0].message.content
+                if not content:
+                    continue
+                cleaned = _clean_json_text(content.strip())
                 return json.loads(cleaned)
             except Exception as e:
                 print(f"Groq API fallback error on {g_model}: {e}")
@@ -181,7 +186,7 @@ Respond ONLY with a JSON object in this exact format:
         {"question": "Why are you interested in this role and what do you hope to achieve here?", "category": "closing"}
     ]
 
-def analyze_interview(transcript: str, questions: list = None) -> Dict[str, Any]:
+def analyze_interview(transcript: str, questions: list | None = None) -> Dict[str, Any]:
     """
     Analyzes an interview transcript using Groq or Gemini for sentiment and keeps heuristics for filler words/keywords.
     """
@@ -326,16 +331,22 @@ def generate_scorecard(student: models.Student, assessment_score: float, intervi
     Generates a scorecard based on candidate data using real Gemini AI logic.
     Uses extracted PDF text from resume_url when available; falls back to skills array.
     """
-    job_description = drive.description or "No description provided for the drive."
+    drive_desc = getattr(drive, "description", None)
+    job_description: str = str(drive_desc) if drive_desc else "No description provided for the drive."
 
     # Prefer real extracted resume text; fall back to skills-as-proxy
     resume_text = ""
-    if getattr(student, "resume_url", None):
-        resume_text = extract_text_from_resume_url(student.resume_url)
+    resume_url = getattr(student, "resume_url", None)
+    if resume_url:
+        resume_text = extract_text_from_resume_url(str(resume_url))
 
     if not resume_text:
         # Fallback: use skills array as proxy
-        resume_text = ", ".join(student.skills) if student.skills else "No skills listed"
+        student_skills = getattr(student, "skills", None)
+        if isinstance(student_skills, (list, tuple, set)):
+            resume_text = ", ".join(str(s) for s in student_skills) if len(student_skills) > 0 else "No skills listed"
+        else:
+            resume_text = "No skills listed"
     
     match_data = match_resume_to_jd(resume_text, job_description)
     resume_match_score = float(match_data.get("match_score", 60.0))

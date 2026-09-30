@@ -1,0 +1,32 @@
+services:
+  # ─────────────────────────────────────────────
+  # FastAPI Backend
+  # ─────────────────────────────────────────────
+  - type: web
+    name: hirelytics-api
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: src
+    buildCommand: pip install -r app/requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: DATABASE_URL
+        sync: false   # Set in Render dashboard
+      - key: JWT_SECRET_KEY
+        sync: false   # Set in Render dashboard
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false   # e.g. https://hirelytics.vercel.app

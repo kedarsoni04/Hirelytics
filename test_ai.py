@@ -9,19 +9,19 @@ def run_tests():
     print("--- SETUP ---")
     s = requests.Session()
 
-    company_payload = {"email": "ai_company@test.com", "password": "pass", "role": "company", "company_name": "AI Corp"}
+    import uuid
+    uid = str(uuid.uuid4())[:8]
+    company_payload = {"email": f"ai_company_{uid}@test.com", "password": "pass", "role": "company", "company_name": f"AI Corp {uid}"}
     res = s.post(f"{BASE_URL}/auth/signup", json=company_payload)
     if res.status_code != 200:
-        # Might already exist
-        res = s.post(f"{BASE_URL}/auth/login", data={"username": "ai_company@test.com", "password": "pass"})
+        res = s.post(f"{BASE_URL}/auth/login", data={"username": f"ai_company_{uid}@test.com", "password": "pass"})
     company_token = res.json().get("access_token")
     company_headers = {"Authorization": f"Bearer {company_token}"}
 
-    student_payload = {"email": "ai_student@test.com", "password": "pass", "role": "student", "full_name": "AI Student"}
+    student_payload = {"email": f"ai_student_{uid}@test.com", "password": "pass", "role": "student", "full_name": "AI Student"}
     res = s.post(f"{BASE_URL}/auth/signup", json=student_payload)
     if res.status_code != 200:
-        # Might already exist
-        res = s.post(f"{BASE_URL}/auth/login", data={"username": "ai_student@test.com", "password": "pass"})
+        res = s.post(f"{BASE_URL}/auth/login", data={"username": f"ai_student_{uid}@test.com", "password": "pass"})
     student_token = res.json().get("access_token")
     student_headers = {"Authorization": f"Bearer {student_token}"}
 

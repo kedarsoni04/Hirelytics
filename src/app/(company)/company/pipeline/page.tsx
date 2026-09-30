@@ -50,14 +50,37 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+type PipelineCandidate = {
+  id: string;
+  current_stage: string;
+  student?: {
+    full_name?: string;
+    email?: string;
+    college?: string;
+    branch?: string;
+    cgpa?: number;
+    resume_url?: string;
+  };
+  drive?: {
+    id?: string;
+    title?: string;
+    package?: string;
+    [key: string]: unknown;
+  };
+  score?: number;
+  match_score?: number;
+  created_at?: string;
+  [key: string]: unknown;
+};
+
 export default function PipelinePage() {
-  const [applications, setApplications] = useState<any[]>([]);
+  const [applications, setApplications] = useState<PipelineCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   const [offerModalOpen, setOfferModalOpen] = useState(false);
-  const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
+  const [selectedCandidate, setSelectedCandidate] = useState<PipelineCandidate | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const loadPipeline = async () => {
@@ -70,13 +93,13 @@ export default function PipelinePage() {
         return;
       }
       const appArrays = await Promise.all(
-        drives.map((d: any) => api.getDriveApplications(d.id).catch(() => []))
+        drives.map((d: { id: string }) => api.getDriveApplications(d.id).catch(() => []))
       );
       const allApps = appArrays.flat();
       setApplications(allApps);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Pipeline] Load error:", err);
-      setError(err.message || "Failed to load pipeline");
+      setError(err instanceof Error ? err.message : "Failed to load pipeline");
     } finally {
       setLoading(false);
     }
@@ -94,15 +117,15 @@ export default function PipelinePage() {
         prev.map((app) => (app.id === appId ? { ...app, current_stage: toDbStage } : app))
       );
       dispatchNotificationsUpdated();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Pipeline] Stage update error:", err);
-      alert(err.message || "Failed to update stage");
+      alert(err instanceof Error ? err.message : "Failed to update stage");
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const handleGenerateOffer = (candidate: any) => {
+  const handleGenerateOffer = (candidate: PipelineCandidate) => {
     setSelectedCandidate(candidate);
     setOfferModalOpen(true);
   };

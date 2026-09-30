@@ -44,10 +44,10 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
-    let errorData: any = {};
+    let errorData: { detail?: string | { msg?: string }[] } = {};
     try {
       errorData = await response.json();
-    } catch (e) {
+    } catch {
       // Ignored — body may not be JSON
     }
     // FastAPI can return detail as a string OR as an array of validation error objects
@@ -57,7 +57,7 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
       message = detail;
     } else if (Array.isArray(detail)) {
       // Validation error: pick the first human-readable message
-      message = detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join('; ');
+      message = detail.map((d) => (typeof d === 'object' && d !== null && 'msg' in d ? String(d.msg) : JSON.stringify(d))).join('; ');
     } else {
       message = `Request failed with status ${response.status}`;
     }
@@ -69,25 +69,25 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
 
 export const api = {
   // Auth
-  signup: (data: any) => fetchAPI('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
+  signup: (data: Record<string, unknown>) => fetchAPI('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
   // Backend login expects JSON: { email, password } — NOT OAuth2 form data
   login: (data: { email: string; password: string }) =>
     fetchAPI('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
   getMe: () => fetchAPI('/auth/me', { method: 'GET' }),
-  updateProfile: (data: Record<string, any>) =>
+  updateProfile: (data: Record<string, unknown>) =>
     fetchAPI('/students/me', { method: 'PATCH', body: JSON.stringify(data) }),
   deleteAccount: () => fetchAPI('/students/me', { method: 'DELETE' }),
 
   // Companies
   getCompanyProfile: () => fetchAPI('/companies/me', { method: 'GET' }),
-  updateCompanyProfile: (data: Record<string, any>) =>
+  updateCompanyProfile: (data: Record<string, unknown>) =>
     fetchAPI('/companies/me', { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Drives
-  createDrive: (data: any) => fetchAPI('/drives', { method: 'POST', body: JSON.stringify(data) }),
+  createDrive: (data: Record<string, unknown>) => fetchAPI('/drives', { method: 'POST', body: JSON.stringify(data) }),
   getDrives: () => fetchAPI('/drives', { method: 'GET' }),
   getDrive: (id: string) => fetchAPI(`/drives/${id}`, { method: 'GET' }),
-  updateDrive: (id: string, data: any) => fetchAPI(`/drives/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateDrive: (id: string, data: Record<string, unknown>) => fetchAPI(`/drives/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getMyCompanyDrives: () => fetchAPI('/drives/company/mine', { method: 'GET' }),
   getCompanyAnalytics: () => fetchAPI('/drives/company/analytics', { method: 'GET' }),
 
@@ -100,16 +100,17 @@ export const api = {
 
   // Assessments
   getDriveAssessment: (driveId: string) => fetchAPI(`/assessments/drive/${driveId}`, { method: 'GET' }),
-  createAssessment: (data: { drive_id: string; questions: any[]; duration_mins: number }) =>
+  createAssessment: (data: { drive_id: string; questions: Record<string, unknown>[]; duration_mins: number }) =>
     fetchAPI('/assessments', { method: 'POST', body: JSON.stringify(data) }),
-  submitAssessment: (data: any) => fetchAPI('/assessments/submit', { method: 'POST', body: JSON.stringify(data) }),
+  submitAssessment: (data: { application_id: string; answers: { question_id: number; selected_option: number }[]; proctor_flags: unknown[] }) =>
+    fetchAPI('/assessments/submit', { method: 'POST', body: JSON.stringify(data) }),
   getAssessmentSubmission: (applicationId: string) => fetchAPI(`/assessments/submission/${applicationId}`, { method: 'GET' }),
 
   // Interviews
   getApplicationInterview: (applicationId: string) => fetchAPI(`/interviews/application/${applicationId}`, { method: 'GET' }),
-  createInterview: (data: { application_id: string; questions: any[] }) =>
+  createInterview: (data: { application_id: string; questions: Record<string, unknown>[] }) =>
     fetchAPI('/interviews', { method: 'POST', body: JSON.stringify(data) }),
-  submitInterview: (interviewId: string, data: any) => fetchAPI(`/interviews/${interviewId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
+  submitInterview: (interviewId: string, data: { transcript: string }) => fetchAPI(`/interviews/${interviewId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
   getCompanyScheduledInterviews: () => fetchAPI('/interviews/company/scheduled', { method: 'GET' }),
   scheduleInterview: (data: { application_id: string; scheduled_at: string; notes?: string }) =>
     fetchAPI('/interviews/schedule', { method: 'POST', body: JSON.stringify(data) }),

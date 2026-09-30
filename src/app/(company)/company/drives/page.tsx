@@ -89,9 +89,9 @@ export default function CompanyDrivesPage() {
       setError(null);
       const data = await api.getMyCompanyDrives();
       setDrives(data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Company Drives] Error fetching drives:", err);
-      setError(err.message || "Failed to load drives");
+      setError(err instanceof Error ? err.message : "Failed to load drives");
     } finally {
       setLoading(false);
     }
@@ -108,9 +108,9 @@ export default function CompanyDrivesPage() {
       setDrives((prev) =>
         prev.map((d) => (d.id === driveId ? { ...d, status: "live" } : d))
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Company Drives] Publish error:", err);
-      alert(err.message || "Failed to publish drive");
+      alert(err instanceof Error ? err.message : "Failed to publish drive");
     } finally {
       setPublishingId(null);
     }

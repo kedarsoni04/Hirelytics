@@ -22,12 +22,14 @@ import {
   Loader2,
   AlertCircle,
   XCircle,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
 import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
+import { dispatchApplicationsUpdated } from "@/lib/use-nav-counts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,24 @@ type Drive = {
   status: string;
   deadline: string | null;
   created_at: string;
+};
+
+type Application = {
+  id: string;
+  drive_id: string;
+  drive?: { id: string };
+  [key: string]: unknown;
+};
+
+type Assessment = {
+  questions: unknown[];
+  duration_mins: number;
+  [key: string]: unknown;
+};
+
+type Submission = {
+  score: number | null;
+  [key: string]: unknown;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -114,6 +134,9 @@ export default function DriveDetailPage() {
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applySuccess, setApplySuccess] = useState(false);
+  const [existingApp, setExistingApp] = useState<Application | null>(null);
+  const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [submission, setSubmission] = useState<Submission | null>(null);
 
   useEffect(() => {
     if (!driveId) return;
@@ -123,9 +146,36 @@ export default function DriveDetailPage() {
         setError(null);
         const data = await api.getDrive(driveId);
         setDrive(data);
-      } catch (err: any) {
+
+        // Check if student already applied
+        try {
+          const myApps = await api.getMyApplications();
+          const match = myApps.find((a: Application) => a.drive_id === driveId || a.drive?.id === driveId);
+          if (match) {
+            setExistingApp(match);
+            try {
+              const sub = await api.getAssessmentSubmission(match.id);
+              if (sub) setSubmission(sub);
+            } catch {
+              // Not submitted yet
+            }
+          }
+        } catch (e) {
+          console.error("Could not fetch my applications:", e);
+        }
+
+        // Check if drive has an assessment
+        try {
+          const assess = await api.getDriveAssessment(driveId);
+          if (assess && assess.questions && assess.questions.length > 0) {
+            setAssessment(assess);
+          }
+        } catch {
+          // No assessment for this drive yet
+        }
+      } catch (err: unknown) {
         console.error("[Drive Detail] API error:", err);
-        setError(err.message || "Drive not found");
+        setError(err instanceof Error ? err.message : "Drive not found");
       } finally {
         setLoading(false);
       }
@@ -137,7 +187,7 @@ export default function DriveDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-4">
         <Loader2 className="size-8 animate-spin text-[#4F46E5]" />
-        <p className="text-sm text-muted-foreground">Loading drive details\u2026</p>
+        <p className="text-sm text-muted-foreground">Loading drive details…</p>
       </div>
     );
   }
@@ -147,12 +197,14 @@ export default function DriveDetailPage() {
     try {
       setApplying(true);
       setApplyError(null);
-      await api.applyToDrive(drive.id);
+      const newApp = await api.applyToDrive(drive.id);
       setApplySuccess(true);
+      setExistingApp(newApp);
       dispatchNotificationsUpdated();
-    } catch (err: any) {
+      dispatchApplicationsUpdated();
+    } catch (err: unknown) {
       console.error("[Drive Detail] Apply error:", err);
-      setApplyError(err.message || "Failed to apply");
+      setApplyError(err instanceof Error ? err.message : "Failed to apply");
     } finally {
       setApplying(false);
     }
@@ -479,9 +531,47 @@ export default function DriveDetailPage() {
                     </div>
                   )}
 
-                  {applySuccess ? (
-                    <div className="text-sm font-semibold text-[#065F46] bg-[#D1FAE5] p-3 rounded-lg text-center flex items-center justify-center gap-2">
-                      <CheckCircle2 className="size-4" /> Applied Successfully
+                  {existingApp || applySuccess ? (
+                    <div className="space-y-3">
+                      <div className="text-sm font-semibold text-[#065F46] bg-[#D1FAE5] p-3 rounded-lg text-center flex items-center justify-center gap-2">
+                        <CheckCircle2 className="size-4" /> Application Submitted ✓
+                      </div>
+
+                      {assessment ? (
+                        submission ? (
+                          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
+                            <p className="text-xs font-bold text-emerald-800 flex items-center justify-center gap-1.5">
+                              <CheckCircle2 className="size-4 text-emerald-600" />
+                              Assessment Completed ({Math.round(submission.score ?? 0)}%)
+                            </p>
+                            <Link href={`/assessment/${existingApp?.id || driveId}`}>
+                              <Button variant="outline" size="sm" className="w-full text-xs h-8">
+                                View Result
+                              </Button>
+                            </Link>
+                          </div>
+                        ) : (
+                          <div className="p-3.5 rounded-xl bg-[#EEF2FF] border border-[#C7D2FE] space-y-2.5 text-center">
+                            <div>
+                              <p className="text-xs font-bold text-[#3730A3]">
+                                Technical Assessment Ready
+                              </p>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                                {assessment.questions?.length ?? 0} questions · {assessment.duration_mins} mins
+                              </p>
+                            </div>
+                            <Link href={`/assessment/${existingApp?.id || driveId}`}>
+                              <Button className="w-full brand-gradient text-white font-semibold text-xs shadow-sm gap-1.5 animate-pulse">
+                                <FileText className="size-3.5" /> Take Assessment Now
+                              </Button>
+                            </Link>
+                          </div>
+                        )
+                      ) : (
+                        <div className="p-3 rounded-lg bg-muted text-center text-xs text-muted-foreground">
+                          Assessment not published for this drive yet.
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <Button 

@@ -68,7 +68,7 @@ export default function CompanySettingsPage() {
       setIndustry(user.industry || "Technology");
     }
     api.getCompanyProfile()
-      .then((res: any) => {
+      .then((res: { company_name?: string; industry?: string; notification_prefs?: Record<string, boolean> }) => {
         if (res) {
           if (res.company_name) setCompanyName(res.company_name);
           if (res.industry) setIndustry(res.industry);

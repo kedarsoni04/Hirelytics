@@ -84,14 +84,78 @@ function formatDateTime(iso: string | null | undefined) {
   }
 }
 
+type ApplicationDetails = {
+  id: string;
+  drive_id: string;
+  student_id: string;
+  current_stage: string;
+  applied_at: string;
+  student?: {
+    id?: string;
+    full_name?: string;
+    email?: string;
+    college?: string;
+    branch?: string;
+    cgpa?: number;
+    skills?: string[];
+    resume_url?: string;
+    linkedin_url?: string;
+    github_url?: string;
+    portfolio_url?: string;
+  };
+  drive?: {
+    id?: string;
+    title?: string;
+    company_name?: string;
+    package?: string;
+    location?: string;
+  };
+  resume_match_score?: number;
+  assessment_score?: number;
+  score?: number;
+  [key: string]: unknown;
+};
+
+type ScorecardData = {
+  id?: string;
+  application_id?: string;
+  overall_score?: number;
+  overall_ai_score?: number;
+  resume_match_score?: number;
+  assessment_score?: number;
+  communication_score?: number;
+  technical_interview_score?: number;
+  recommendation?: string;
+  summary?: string;
+  ai_summary?: string;
+  ai_insights?: string[];
+  strengths?: string[];
+  weaknesses?: string[];
+  technical_skills_score?: number;
+  problem_solving_score?: number;
+  cultural_fit_score?: number;
+  breakdown?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+type SubmissionData = {
+  id?: string;
+  score?: number;
+  passed?: boolean;
+  proctor_flags?: unknown[];
+  created_at?: string;
+  submitted_at?: string;
+  [key: string]: unknown;
+};
+
 export default function CandidateScorecardPage() {
   const params = useParams();
   const driveId = params?.driveId as string;
   const candidateId = params?.candidateId as string; // this is application_id
 
-  const [application, setApplication] = useState<any | null>(null);
-  const [scorecard, setScorecard] = useState<any | null>(null);
-  const [submission, setSubmission] = useState<any | null>(null); // assessment submission
+  const [application, setApplication] = useState<ApplicationDetails | null>(null);
+  const [scorecard, setScorecard] = useState<ScorecardData | null>(null);
+  const [submission, setSubmission] = useState<SubmissionData | null>(null); // assessment submission
   const [interviewExists, setInterviewExists] = useState<boolean | null>(null); // null = checking
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,9 +198,9 @@ export default function CandidateScorecardPage() {
       } catch {
         setInterviewExists(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Candidate Scorecard] Load error:", err);
-      setError(err.message || "Failed to load candidate application");
+      setError(err instanceof Error ? err.message : "Failed to load candidate application");
     } finally {
       setLoading(false);
     }
@@ -151,11 +215,11 @@ export default function CandidateScorecardPage() {
       setActionLoading(true);
       setActionMessage(null);
       await api.updateApplicationStage(candidateId, newStage);
-      setApplication((prev: any) => ({ ...prev, current_stage: newStage }));
+      setApplication((prev) => (prev ? { ...prev, current_stage: newStage } : null));
       dispatchNotificationsUpdated();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Candidate Action] Error:", err);
-      setActionMessage(err.message || "Failed to update candidate stage");
+      setActionMessage(err instanceof Error ? err.message : "Failed to update candidate stage");
       setActionMessageType("error");
     } finally {
       setActionLoading(false);
@@ -171,9 +235,9 @@ export default function CandidateScorecardPage() {
       // Reload application to get any updated stage
       const updatedApp = await api.getApplication(candidateId);
       setApplication(updatedApp);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Generate Scorecard] Error:", err);
-      setActionMessage(err.message || "Failed to generate scorecard. Complete Assessment & Interview first.");
+      setActionMessage(err instanceof Error ? err.message : "Failed to generate scorecard. Complete Assessment & Interview first.");
       setActionMessageType("error");
     } finally {
       setGenerating(false);
@@ -193,9 +257,9 @@ export default function CandidateScorecardPage() {
       const updatedApp = await api.getApplication(candidateId);
       setApplication(updatedApp);
       dispatchNotificationsUpdated();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Schedule Interview] Error:", err);
-      setActionMessage(err.message || "Failed to schedule interview. Please try again.");
+      setActionMessage(err instanceof Error ? err.message : "Failed to schedule interview. Please try again.");
       setActionMessageType("error");
     } finally {
       setSchedulingInterview(false);
@@ -493,14 +557,21 @@ export default function CandidateScorecardPage() {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {submission.proctor_flags.map((flag: any, idx: number) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-medium"
-                      >
-                        {typeof flag === "string" ? flag : flag.type || JSON.stringify(flag)}
-                      </span>
-                    ))}
+                    {submission.proctor_flags.map((flag: unknown, idx: number) => {
+                      const label = typeof flag === "string" 
+                        ? flag 
+                        : (flag && typeof flag === "object" && "type" in flag 
+                            ? String((flag as Record<string, unknown>).type) 
+                            : JSON.stringify(flag));
+                      return (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-medium"
+                        >
+                          {label}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (

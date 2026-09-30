@@ -37,8 +37,8 @@ export default function LoginPage() {
       const result = await api.login({ email: trimmedEmail, password });
       setToken(result.access_token);
       await refreshUser(); // Context will redirect
-    } catch (err: any) {
-      setError(err.message || "Failed to login");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to login");
     } finally {
       setLoading(false);
     }
@@ -118,7 +118,7 @@ export default function LoginPage() {
         </form>
 
         <div className="text-center text-xs text-muted-foreground">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link href="/signup" className="font-semibold text-indigo-600 hover:text-indigo-500">
             Sign up
           </Link>

@@ -39,6 +39,9 @@ class ApplicationDetailOut(schemas.ApplicationOut):
     drive: Optional[DriveDetailForApplication] = None
     student: Optional[StudentDetailForApplication] = None
     overall_ai_score: Optional[float] = None
+    has_assessment: Optional[bool] = False
+    assessment_completed: Optional[bool] = False
+    assessment_score: Optional[float] = None
 
 
 def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
@@ -73,6 +76,15 @@ def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
         else None
     )
 
+    has_assessment = bool(app_obj.drive and app_obj.drive.assessment)
+    submission_obj = getattr(app_obj, "assessment_submission", None)
+    assessment_completed = bool(submission_obj is not None)
+    assessment_score = (
+        float(submission_obj.score)
+        if submission_obj and submission_obj.score is not None
+        else None
+    )
+
     return {
         "id": app_obj.id,
         "student_id": app_obj.student_id,
@@ -83,6 +95,9 @@ def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
         "drive": drive_info,
         "student": student_info,
         "overall_ai_score": overall_ai_score,
+        "has_assessment": has_assessment,
+        "assessment_completed": assessment_completed,
+        "assessment_score": assessment_score,
     }
 
 
@@ -235,7 +250,7 @@ def update_application_stage(
             detail="Operation not permitted. You can only update applications for your own drives.",
         )
 
-    app_obj.current_stage = payload.current_stage
+    setattr(app_obj, "current_stage", payload.current_stage)
 
     if payload.current_stage == models.ApplicationStage.shortlisted:
         log = models.ActivityLog(

@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
   TrendingUp,
   Calendar,
+  CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,9 @@ interface Application {
   updated_at?: string | null;
   drive?: ApplicationDrive | null;
   overall_ai_score?: number | null;
+  has_assessment?: boolean;
+  assessment_completed?: boolean;
+  assessment_score?: number | null;
 }
 
 
@@ -355,7 +359,20 @@ export default function ApplicationsPage() {
                 </div>
 
                 {/* Action */}
-                <div className="hidden md:flex items-center justify-end">
+                <div className="hidden md:flex items-center justify-end gap-2">
+                  {app.has_assessment && (
+                    app.assessment_completed ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 whitespace-nowrap">
+                        <CheckCircle2 className="size-3" /> Test: {Math.round(app.assessment_score ?? 0)}%
+                      </span>
+                    ) : (
+                      <Link href={`/assessment/${app.id}`}>
+                        <Button size="sm" className="h-7 px-2.5 text-xs font-semibold bg-[#4F46E5] hover:bg-[#4338CA] text-white shadow-sm gap-1 whitespace-nowrap">
+                          <FileText className="size-3" /> Take Assessment
+                        </Button>
+                      </Link>
+                    )
+                  )}
                   {isActive ? (
                     <Link href={`/drives/${app.drive_id}`}>
                       <Button variant="ghost" size="sm" className="text-xs gap-1 h-7 group-hover:bg-accent">
@@ -368,20 +385,37 @@ export default function ApplicationsPage() {
                 </div>
 
                 {/* Mobile: extra info */}
-                <div className="md:hidden flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs tracking-tight text-muted-foreground">{formatDate(app.applied_at)}</span>
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs tracking-tight font-bold bg-[#EDE9FE] text-[#5B21B6]">
-                      <Sparkles className="size-2.5" />
-                      {typeof app.overall_ai_score === "number" ? Math.round(app.overall_ai_score) : "--"}
-                    </span>
+                <div className="md:hidden flex flex-col gap-2 pt-2 border-t border-border/40">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs tracking-tight text-muted-foreground">{formatDate(app.applied_at)}</span>
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs tracking-tight font-bold bg-[#EDE9FE] text-[#5B21B6]">
+                        <Sparkles className="size-2.5" />
+                        {typeof app.overall_ai_score === "number" ? Math.round(app.overall_ai_score) : "--"}
+                      </span>
+                    </div>
+                    {isActive && (
+                      <Link href={`/drives/${app.drive_id}`}>
+                        <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
+                          View <ArrowRight className="size-3" />
+                        </Button>
+                      </Link>
+                    )}
                   </div>
-                  {isActive && (
-                    <Link href={`/drives/${app.drive_id}`}>
-                      <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
-                        View <ArrowRight className="size-3" />
-                      </Button>
-                    </Link>
+                  {app.has_assessment && (
+                    <div className="flex items-center justify-end">
+                      {app.assessment_completed ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700">
+                          <CheckCircle2 className="size-3" /> Test: {Math.round(app.assessment_score ?? 0)}%
+                        </span>
+                      ) : (
+                        <Link href={`/assessment/${app.id}`} className="w-full">
+                          <Button size="sm" className="w-full h-8 text-xs font-semibold bg-[#4F46E5] hover:bg-[#4338CA] text-white gap-1.5">
+                            <FileText className="size-3.5" /> Take Assessment
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

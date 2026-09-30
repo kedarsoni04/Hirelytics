@@ -6,6 +6,8 @@
   "extraPaths": [
     "src"
   ],
+  "venvPath": ".",
+  "venv": "venv",
   "executionEnvironments": [
     {
       "root": ".",

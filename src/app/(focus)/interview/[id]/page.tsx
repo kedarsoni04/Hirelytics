@@ -26,6 +26,21 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 
+type InterviewQuestion = {
+  question?: string;
+  text?: string;
+  category?: string;
+  [key: string]: unknown;
+};
+
+type InterviewData = {
+  id: string;
+  application_id: string;
+  questions: (string | InterviewQuestion)[];
+  completed_at: string | null;
+  [key: string]: unknown;
+};
+
 type AppState = "idle" | "recording" | "analyzing" | "done";
 
 export default function InterviewPage() {
@@ -34,7 +49,7 @@ export default function InterviewPage() {
   const applicationId = params?.id as string;
   const { user } = useAuth();
 
-  const [interview, setInterview] = useState<any | null>(null);
+  const [interview, setInterview] = useState<InterviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,9 +74,9 @@ export default function InterviewPage() {
         if (data.completed_at) {
           setIsCompleted(true);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[Interview] Load error:", err);
-        setError(err.message || "Failed to load interview. It may not be scheduled yet.");
+        setError(err instanceof Error ? err.message : "Failed to load interview. It may not be scheduled yet.");
       } finally {
         setLoading(false);
       }
@@ -191,11 +206,11 @@ export default function InterviewPage() {
             ...prev,
             [currentQuestionIndex]: res.transcript || "No speech detected.",
           }));
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error("Transcription error:", err);
           setRecordedTranscripts((prev) => ({
             ...prev,
-            [currentQuestionIndex]: "[Error transcribing audio. Please try again.]",
+            [currentQuestionIndex]: err instanceof Error ? `[Error: ${err.message}]` : "[Error transcribing audio. Please try again.]",
           }));
         } finally {
           setState("done");
@@ -229,7 +244,7 @@ export default function InterviewPage() {
       try {
         setSubmitting(true);
         const fullTranscript = questions
-          .map((q: any, i: number) => {
+          .map((q: string | InterviewQuestion, i: number) => {
             const qText = typeof q === "string" ? q : q.question || q.text || `Question ${i + 1}`;
             const ans = recordedTranscripts[i] || "No response recorded.";
             return `Question ${i + 1}: ${qText}\nAnswer: ${ans}`;
@@ -241,9 +256,9 @@ export default function InterviewPage() {
         });
         setIsCompleted(true);
         dispatchNotificationsUpdated();
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[Submit Interview] Error:", err);
-        alert(err.message || "Failed to submit interview.");
+        alert(err instanceof Error ? err.message : "Failed to submit interview.");
       } finally {
         setSubmitting(false);
       }
@@ -331,7 +346,7 @@ export default function InterviewPage() {
                 {/* Transcript preview */}
                 <div className="w-full text-left bg-gray-50 p-3 rounded-lg border text-sm max-h-32 overflow-y-auto mb-2 text-gray-700">
                   <p className="text-xs font-semibold text-gray-500 mb-1">Transcript:</p>
-                  "{recordedTranscripts[currentQuestionIndex]}"
+                  &quot;{recordedTranscripts[currentQuestionIndex]}&quot;
                 </div>
 
                 <Button

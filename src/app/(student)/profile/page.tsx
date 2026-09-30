@@ -145,7 +145,7 @@ export default function ProfilePage() {
     setSaveError("");
     try {
       // Build payload with only changed / non-empty values
-      const payload: Record<string, any> = {
+      const payload: Record<string, unknown> = {
         full_name: form.full_name.trim() || user.full_name,
         college: form.college.trim() || null,
         branch: form.branch.trim() || null,
@@ -174,8 +174,8 @@ export default function ProfilePage() {
       setEditing(false);
       setSaveDone(true);
       setTimeout(() => setSaveDone(false), 2500);
-    } catch (err: any) {
-      setSaveError(err.message || "Failed to save changes");
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save changes");
     } finally {
       setSaving(false);
     }
@@ -211,8 +211,8 @@ export default function ProfilePage() {
       updateUser({ resume_url: updated.resume_url });
       setResumeSuccess(true);
       setTimeout(() => setResumeSuccess(false), 4000);
-    } catch (err: any) {
-      setResumeError(err.message || "Upload failed. Please try again.");
+    } catch (err: unknown) {
+      setResumeError(err instanceof Error ? err.message : "Upload failed. Please try again.");
     } finally {
       setResumeUploading(false);
       // Reset input so the same file can be re-selected after an error

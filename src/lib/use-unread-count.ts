@@ -20,7 +20,7 @@ export function useUnreadCount(enabled: boolean = true) {
     const fetchUnread = () => {
       api
         .getUnreadNotificationCount()
-        .then((res: any) => setUnreadCount(res.count ?? 0))
+        .then((res: { count?: number }) => setUnreadCount(res.count ?? 0))
         .catch(() => {});
     };
 

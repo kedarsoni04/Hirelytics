@@ -63,29 +63,29 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // ── Helper: normalise the raw API response ─────────────────────────────────────
 
-function normaliseUser(raw: any): User {
-  const sp: StudentProfile = raw.student_profile ?? {};
-  const cp: CompanyProfile = raw.company_profile ?? {};
+function normaliseUser(raw: Record<string, unknown>): User {
+  const sp = (raw.student_profile as StudentProfile | undefined) ?? {};
+  const cp = (raw.company_profile as CompanyProfile | undefined) ?? {};
 
   return {
-    id: raw.id,
-    email: raw.email,
-    role: raw.role,
-    is_active: raw.is_active,
-    created_at: raw.created_at,
+    id: String(raw.id || ""),
+    email: String(raw.email || ""),
+    role: String(raw.role || "student"),
+    is_active: Boolean(raw.is_active ?? true),
+    created_at: String(raw.created_at || ""),
     // Hoist student profile fields
-    full_name: raw.full_name ?? sp.full_name,
-    college: raw.college ?? sp.college,
-    branch: raw.branch ?? sp.branch,
-    cgpa: raw.cgpa ?? sp.cgpa,
-    skills: raw.skills ?? sp.skills ?? [],
-    linkedin_url: raw.linkedin_url ?? sp.linkedin_url,
-    github_url: raw.github_url ?? sp.github_url,
-    portfolio_url: raw.portfolio_url ?? sp.portfolio_url,
-    resume_url: raw.resume_url ?? sp.resume_url,
+    full_name: (raw.full_name as string) ?? sp.full_name,
+    college: (raw.college as string) ?? sp.college,
+    branch: (raw.branch as string) ?? sp.branch,
+    cgpa: (raw.cgpa as number) ?? sp.cgpa,
+    skills: (raw.skills as string[]) ?? sp.skills ?? [],
+    linkedin_url: (raw.linkedin_url as string) ?? sp.linkedin_url,
+    github_url: (raw.github_url as string) ?? sp.github_url,
+    portfolio_url: (raw.portfolio_url as string) ?? sp.portfolio_url,
+    resume_url: (raw.resume_url as string) ?? sp.resume_url,
     // Hoist company profile fields
-    company_name: raw.company_name ?? cp.company_name,
-    industry: raw.industry ?? cp.industry,
+    company_name: (raw.company_name as string) ?? cp.company_name,
+    industry: (raw.industry as string) ?? cp.industry,
     // Keep raw nested objects
     student_profile: sp,
     company_profile: cp,
@@ -127,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
   const isPublicRoute = isAuthRoute || pathname === "/design-system";
-  const isStudentRoute = ["/dashboard", "/applications", "/resume", "/progress", "/resources", "/drives", "/profile", "/notifications", "/settings"].some(
+  const isStudentRoute = ["/dashboard", "/applications", "/resume", "/progress", "/resources", "/drives", "/profile", "/notifications", "/settings", "/assessment", "/interview"].some(
     (route) => pathname?.startsWith(route)
   );
   const isCompanyRoute = pathname?.startsWith("/company");

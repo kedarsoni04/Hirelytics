@@ -88,16 +88,17 @@ export default function BrowseDrivesPage() {
       setError(null);
       const data = await api.getDrives();
       setDrives(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Browse Drives] API error:", err);
-      setError(err.message || "Failed to load drives");
+      setError(err instanceof Error ? err.message : "Failed to load drives");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDrives();
+    const load = async () => { await fetchDrives(); };
+    void load();
   }, []);
 
   const filtered = drives.filter((d) => {

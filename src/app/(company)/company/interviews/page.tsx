@@ -164,9 +164,9 @@ export default function InterviewSchedulerPage() {
       
       // Refresh list
       await loadData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to schedule interview:", error);
-      setScheduleError(error?.message || "Failed to schedule interview. Please try again.");
+      setScheduleError(error instanceof Error ? error.message : "Failed to schedule interview. Please try again.");
     } finally {
       setSubmitting(false);
     }

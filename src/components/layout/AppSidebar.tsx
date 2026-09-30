@@ -32,6 +32,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 import { useAuth } from "@/lib/auth-context";
 import { useUnreadCount } from "@/lib/use-unread-count";
+import { useNavCounts } from "@/lib/use-nav-counts";
 
 type NavItem = {
   icon: React.ElementType;
@@ -51,8 +52,8 @@ const studentNavItems: NavGroup[] = [
     group: "Main",
     items: [
       { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-      { icon: Briefcase, label: "Browse Drives", href: "/drives", badge: "34" },
-      { icon: FileText, label: "My Applications", href: "/applications", badge: "12" },
+      { icon: Briefcase, label: "Browse Drives", href: "/drives", badge: "__DRIVES__" },
+      { icon: FileText, label: "My Applications", href: "/applications", badge: "__APPLICATIONS__" },
       { icon: TrendingUp, label: "My Progress", href: "/progress" },
     ],
   },
@@ -79,7 +80,7 @@ const companyNavItems: NavGroup[] = [
     group: "Main",
     items: [
       { icon: LayoutDashboard, label: "Dashboard", href: "/company/dashboard" },
-      { icon: Briefcase, label: "My Drives", href: "/company/drives", badge: "4" },
+      { icon: Briefcase, label: "My Drives", href: "/company/drives", badge: "__COMPANY_DRIVES__" },
       { icon: Kanban, label: "Offer Pipeline", href: "/company/pipeline" },
       { icon: Users, label: "Candidates", href: "/company/pipeline" },
       { icon: Calendar, label: "Interviews", href: "/company/interviews" },
@@ -126,6 +127,25 @@ export default function AppSidebar({ role }: AppSidebarProps) {
   const { user, logout } = useAuth();
   const unreadCount = useUnreadCount(role !== "admin");
   const unreadBadge = unreadCount > 0 ? (unreadCount > 99 ? "99+" : String(unreadCount)) : undefined;
+  const navCounts = useNavCounts(role);
+
+  const resolveBadge = (badge?: string) => {
+    if (!badge) return null;
+    if (badge === "__UNREAD__") return unreadBadge ?? null;
+    if (badge === "__DRIVES__") {
+      if (navCounts.drivesCount === undefined || navCounts.drivesCount <= 0) return null;
+      return navCounts.drivesCount > 99 ? "99+" : String(navCounts.drivesCount);
+    }
+    if (badge === "__APPLICATIONS__") {
+      if (navCounts.applicationsCount === undefined || navCounts.applicationsCount <= 0) return null;
+      return navCounts.applicationsCount > 99 ? "99+" : String(navCounts.applicationsCount);
+    }
+    if (badge === "__COMPANY_DRIVES__") {
+      if (navCounts.companyDrivesCount === undefined || navCounts.companyDrivesCount <= 0) return null;
+      return navCounts.companyDrivesCount > 99 ? "99+" : String(navCounts.companyDrivesCount);
+    }
+    return badge;
+  };
   
   const navItems = role === "admin" ? adminNavItems : role === "student" ? studentNavItems : companyNavItems;
 
@@ -240,6 +260,7 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                   const Icon = item.icon;
                   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                   const isAI = item.ai;
+                  const badgeText = resolveBadge(item.badge);
 
                   if (role === "student") {
                     return (
@@ -263,11 +284,11 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                         {!collapsed && (
                           <>
                             <span className="text-xs font-medium flex-1 text-left truncate">{item.label}</span>
-                            {item.badge && (
+                            {badgeText && (
                               <span className={`text-xs tracking-tight font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
                                   isAI ? "bg-violet-500 text-white" : "bg-sidebar-foreground/10 text-sidebar-foreground/60"
                                 }`}>
-                                {item.badge === "__UNREAD__" ? (unreadBadge ?? null) : item.badge}
+                                {badgeText}
                               </span>
                             )}
                           </>
@@ -290,9 +311,9 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                           {!collapsed && (
                             <>
                               <span className="flex-1 truncate">{item.label}</span>
-                              {item.badge && (
+                              {badgeText && (
                                 <span className="text-xs tracking-tight font-semibold px-1.5 py-0.5 rounded-full bg-sidebar-accent text-sidebar-foreground/60">
-                                  {item.badge === "__UNREAD__" ? (unreadBadge ?? null) : item.badge}
+                                  {badgeText}
                                 </span>
                               )}
                             </>
@@ -316,7 +337,9 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                 </p>
               </div>
               <p className="text-xs tracking-tight text-sidebar-foreground/40 mt-1 leading-relaxed">
-                100 candidates ranked across 2 live drives.
+                {navCounts.companyDrivesCount !== undefined
+                  ? `${navCounts.companyApplicantsCount ?? 0} candidate${(navCounts.companyApplicantsCount ?? 0) !== 1 ? "s" : ""} across ${navCounts.companyDrivesCount} drive${navCounts.companyDrivesCount !== 1 ? "s" : ""}.`
+                  : "Automated candidate screening active."}
               </p>
             </div>
           )}

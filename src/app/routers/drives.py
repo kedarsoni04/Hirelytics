@@ -106,7 +106,7 @@ def get_company_analytics(
 
     drive_app_count = {}
     for d in drives:
-        drive_app_count[d.id] = {"title": d.title, "name": d.title, "count": 0, "applicants": 0}
+        drive_app_count[d.id] = {"drive_id": d.id, "title": d.title, "name": d.title, "count": 0, "applicants": 0}
     for app in applications:
         if app.drive_id in drive_app_count:
             drive_app_count[app.drive_id]["count"] += 1

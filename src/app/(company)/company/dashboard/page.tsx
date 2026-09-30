@@ -82,16 +82,34 @@ export default function CompanyDashboard() {
   const [drives, setDrives] = useState<Drive[]>([]);
   const [drivesLoading, setDrivesLoading] = useState(true);
   const [drivesError, setDrivesError] = useState<string | null>(null);
+  // Map of drive_id -> applicant count from analytics
+  const [driveApplicantMap, setDriveApplicantMap] = useState<Record<string, number>>({});
 
   const fetchDrives = async () => {
     try {
       setDrivesLoading(true);
       setDrivesError(null);
-      const data = await api.getMyCompanyDrives();
-      setDrives(data);
-    } catch (err: any) {
+      const [drivesData, analyticsData] = await Promise.allSettled([
+        api.getMyCompanyDrives(),
+        api.getCompanyAnalytics(),
+      ]);
+      if (drivesData.status === "fulfilled") {
+        setDrives(drivesData.value);
+      }
+      if (analyticsData.status === "fulfilled" && analyticsData.value?.applicants_per_drive) {
+        // Build a map of drive_id -> applicant count from the analytics response
+        const map: Record<string, number> = {};
+        const apd: Array<{ drive_id?: string; title: string; count: number }> = analyticsData.value.applicants_per_drive;
+        apd.forEach((entry) => {
+          // Prefer drive_id matching, fall back to title
+          if (entry.drive_id) map[entry.drive_id] = entry.count;
+          else if (entry.title) map[entry.title] = entry.count;
+        });
+        setDriveApplicantMap(map);
+      }
+    } catch (err: unknown) {
       console.error("[Company Dashboard] drives error:", err);
-      setDrivesError(err.message || "Failed to load drives");
+      setDrivesError(err instanceof Error ? err.message : "Failed to load drives");
     } finally {
       setDrivesLoading(false);
     }
@@ -277,8 +295,8 @@ export default function CompanyDashboard() {
                             try {
                               await api.updateDrive(drive.id, { status: "live" });
                               await fetchDrives();
-                            } catch (e: any) {
-                              alert("Failed to publish: " + e.message);
+                            } catch (e: unknown) {
+                              alert("Failed to publish: " + (e instanceof Error ? e.message : "An error occurred"));
                             }
                           }}
                         >
@@ -307,11 +325,15 @@ export default function CompanyDashboard() {
                       <Separator className="my-3" />
                       <div className="grid grid-cols-3 gap-4">
                         <div className="text-center">
-                          <p className="text-lg font-bold text-foreground">0</p>
+                          <p className="text-lg font-bold text-foreground">
+                            {driveApplicantMap[drive.id] ?? 0}
+                          </p>
                           <p className="text-xs tracking-tight text-muted-foreground">Applicants</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-lg font-bold text-[#8B5CF6]">0</p>
+                          <p className="text-lg font-bold text-[#8B5CF6]">
+                            —
+                          </p>
                           <p className="text-xs tracking-tight text-muted-foreground">AI Shortlisted</p>
                         </div>
                         <div className="text-center">

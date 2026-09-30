@@ -23,12 +23,37 @@ import { api } from "@/lib/api";
 import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 import type { QuestionStatus } from "@/lib/types";
 
+type AssessmentQuestion = {
+  id?: number;
+  question: string;
+  options: string[];
+  [key: string]: unknown;
+};
+
+type AssessmentData = {
+  id: string;
+  drive_id: string;
+  questions: AssessmentQuestion[];
+  duration_mins: number;
+};
+
+type SubmissionResult = {
+  score: number | null;
+  [key: string]: unknown;
+};
+
+type FormattedOption = {
+  id: string;
+  text: string;
+  index: number;
+};
+
 export default function AssessmentPage() {
   const router = useRouter();
   const params = useParams();
   const rawId = params?.id as string;
 
-  const [assessment, setAssessment] = useState<any | null>(null);
+  const [assessment, setAssessment] = useState<AssessmentData | null>(null);
   const [applicationId, setApplicationId] = useState<string | null>(null);
   const [driveTitle, setDriveTitle] = useState<string>("Technical Assessment");
   const [loading, setLoading] = useState(true);
@@ -39,7 +64,7 @@ export default function AssessmentPage() {
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
 
   const [submitting, setSubmitting] = useState(false);
-  const [submissionResult, setSubmissionResult] = useState<any | null>(null);
+  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
 
   useEffect(() => {
     if (!rawId) return;
@@ -50,7 +75,7 @@ export default function AssessmentPage() {
         setError(null);
 
         let resolvedDriveId = rawId;
-        let resolvedAppId = rawId;
+        let resolvedAppId: string | null = null;
 
         // Try to see if rawId is an application_id first, or drive_id
         try {
@@ -63,10 +88,13 @@ export default function AssessmentPage() {
         } catch {
           // If not application, maybe rawId is drive_id
           resolvedDriveId = rawId;
-          // Find student's application for this drive
+        }
+
+        // Find student's application for this drive if not already resolved
+        if (!resolvedAppId) {
           try {
             const myApps = await api.getMyApplications();
-            const matchingApp = myApps.find((a: any) => a.drive_id === rawId || a.drive?.id === rawId);
+            const matchingApp = myApps.find((a: { drive_id: string; id: string; drive?: { id: string; title?: string } }) => a.drive_id === resolvedDriveId || a.drive?.id === resolvedDriveId);
             if (matchingApp) {
               resolvedAppId = matchingApp.id;
               if (matchingApp.drive?.title) setDriveTitle(matchingApp.drive.title);
@@ -81,9 +109,21 @@ export default function AssessmentPage() {
         // Fetch assessment for drive
         const assessData = await api.getDriveAssessment(resolvedDriveId);
         setAssessment(assessData);
-      } catch (err: any) {
+
+        // Check if student already submitted this assessment previously
+        if (resolvedAppId) {
+          try {
+            const existingSub = await api.getAssessmentSubmission(resolvedAppId);
+            if (existingSub) {
+              setSubmissionResult(existingSub);
+            }
+          } catch {
+            // Not submitted yet — ready to take
+          }
+        }
+      } catch (err: unknown) {
         console.error("[Assessment] Load error:", err);
-        setError(err.message || "Failed to load assessment. It might not be created for this drive yet.");
+        setError(err instanceof Error ? err.message : "Failed to load assessment. It might not be created for this drive yet.");
       } finally {
         setLoading(false);
       }
@@ -114,6 +154,35 @@ export default function AssessmentPage() {
                 Back to My Applications
               </Button>
             </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // If student hasn't applied to this drive yet
+  if (!applicationId && !submissionResult) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6">
+        <Card className="border-border max-w-lg w-full card-shadow">
+          <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
+            <AlertCircle className="size-8 text-[#4F46E5]" />
+            <h2 className="text-base font-bold text-foreground">Application Required</h2>
+            <p className="text-xs text-muted-foreground">
+              You must apply to the campus drive before you can take the technical assessment.
+            </p>
+            <div className="flex gap-2 mt-3">
+              <Link href="/drives">
+                <Button size="sm" variant="outline" className="text-xs">
+                  Browse Drives
+                </Button>
+              </Link>
+              <Link href="/applications">
+                <Button size="sm" className="brand-gradient text-white text-xs">
+                  My Applications
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -172,7 +241,7 @@ export default function AssessmentPage() {
       : null;
 
   const handleSelectOption = (optId: string) => {
-    const foundIndex = formattedOptions.findIndex((o: any) => o.id === optId);
+    const foundIndex = formattedOptions.findIndex((o: FormattedOption) => o.id === optId);
     if (foundIndex !== -1) {
       setSelectedAnswers((prev) => ({
         ...prev,
@@ -233,9 +302,9 @@ export default function AssessmentPage() {
 
       setSubmissionResult(res);
       dispatchNotificationsUpdated();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Submit Assessment] Error:", err);
-      alert(err.message || "Failed to submit assessment.");
+      alert(err instanceof Error ? err.message : "Failed to submit assessment.");
     } finally {
       setSubmitting(false);
     }
@@ -295,7 +364,7 @@ export default function AssessmentPage() {
 
           {/* Options */}
           <div className="space-y-3">
-            {formattedOptions.map((opt: any) => (
+            {formattedOptions.map((opt: FormattedOption) => (
               <OptionCard
                 key={opt.id}
                 option={opt}

@@ -37,7 +37,12 @@ if DATABASE_URL and "@" in DATABASE_URL:
     except Exception:
         pass
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Import Base from models so both share the same metadata
