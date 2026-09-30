@@ -23,8 +23,11 @@ DATABASE_URL = os.getenv(
 )
 connect_args = {}
 
-if DATABASE_URL and "channel_binding=" in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.replace("&channel_binding=require", "").replace("channel_binding=require&", "").replace("channel_binding=require", "")
+if DATABASE_URL:
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    if "channel_binding=" in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL.replace("&channel_binding=require", "").replace("channel_binding=require&", "").replace("channel_binding=require", "")
 
 if DATABASE_URL and "@" in DATABASE_URL:
     try:
