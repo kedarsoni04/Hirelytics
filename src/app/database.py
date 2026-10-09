@@ -63,4 +63,11 @@ def get_db():
 
 def init_db():
     """Creates all tables. Call this once on startup, or use Alembic migrations instead."""
+    from sqlalchemy import text
     Base.metadata.create_all(bind=engine)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_start TIMESTAMP WITH TIME ZONE;"))
+            conn.execute(text("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_end TIMESTAMP WITH TIME ZONE;"))
+    except Exception as e:
+        print(f"Schema check error: {e}")

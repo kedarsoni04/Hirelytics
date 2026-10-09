@@ -17,6 +17,8 @@ import {
   ChevronRight,
   Briefcase,
   Loader2,
+  Video,
+  ArrowRight,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -102,6 +104,17 @@ type Stats = {
   ai_score: number | null;
 };
 
+type ActiveInterviewApplication = {
+  id: string;
+  has_interview?: boolean;
+  interview_completed?: boolean;
+  interview_scheduled_at?: string | null;
+  drive?: {
+    title?: string;
+    company_name?: string | null;
+  } | null;
+};
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -127,13 +140,18 @@ export default function DashboardPage() {
   const [drives, setDrives] = useState<Drive[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [activeInterview, setActiveInterview] = useState<ActiveInterviewApplication | null>(null);
   const [drivesLoading, setDrivesLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       api.getDrives().then(data => setDrives(data.slice(0, 3))).catch(() => {}),
       api.getMyStats().then(setStats).catch(() => {}),
-      api.getMyActivity().then(setActivities).catch(() => {})
+      api.getMyActivity().then(setActivities).catch(() => {}),
+      api.getMyApplications().then((apps: ActiveInterviewApplication[]) => {
+        const found = (apps || []).find((a) => a.has_interview && !a.interview_completed);
+        if (found) setActiveInterview(found);
+      }).catch(() => {})
     ]).finally(() => {
       setDrivesLoading(false);
     });
@@ -198,6 +216,42 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {/* ── Scheduled Interview Alert Banner ── */}
+      {activeInterview && (
+        <Card className="card-shadow border border-purple-200 bg-gradient-to-r from-purple-50 via-indigo-50/60 to-white overflow-hidden shadow-sm">
+          <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="size-11 rounded-xl bg-[#7C3AED] text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-500/20">
+                <Video className="size-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
+                    Action Required
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {activeInterview.interview_scheduled_at
+                      ? `Scheduled: ${new Date(activeInterview.interview_scheduled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "numeric" })}`
+                      : "AI Video Interview Ready"}
+                  </span>
+                </div>
+                <p className="text-base font-bold text-foreground mt-0.5">
+                  AI Interview for {activeInterview.drive?.title || "Applied Role"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {activeInterview.drive?.company_name} · Practice and record answers with our AI interviewer
+                </p>
+              </div>
+            </div>
+            <Link href={`/interview/${activeInterview.id}`} className="shrink-0">
+              <Button className="w-full sm:w-auto bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-xs shadow-md shadow-purple-500/20 gap-1.5 h-9 px-4">
+                <Video className="size-3.5" /> Start AI Interview <ArrowRight className="size-3.5" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Stat cards ── */}
       <section>

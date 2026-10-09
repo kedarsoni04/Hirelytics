@@ -1,12 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from sqlalchemy.orm import Session, joinedload
 from app import models, schemas
 from app.database import get_db
 from app.routers.auth import get_current_user, get_current_role
 from app.services.ai_service import analyze_interview, transcribe_audio, generate_interview_questions, extract_text_from_resume_url
-from fastapi import UploadFile, File
 
 router = APIRouter()
 
@@ -30,7 +29,24 @@ def create_interview(
 
     existing_interview = db.query(models.Interview).filter(models.Interview.application_id == payload.application_id).first()
     if existing_interview:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An interview already exists for this application")
+        if not existing_interview.questions and payload.questions:
+            existing_interview.questions = payload.questions  # type: ignore[assignment]
+        elif not existing_interview.questions:
+            resume_text = ""
+            if getattr(application.student, "resume_url", None):
+                resume_text = extract_text_from_resume_url(application.student.resume_url)
+            if not resume_text:
+                resume_text = ", ".join(application.student.skills) if application.student.skills else "No skills listed"
+            existing_interview.questions = generate_interview_questions(  # type: ignore[assignment]
+                job_title=application.drive.title,
+                job_description=application.drive.description or "",
+                required_skills=application.drive.eligible_branches or [],
+                resume_text=resume_text
+            )
+        application.current_stage = models.ApplicationStage.ai_interview
+        db.commit()
+        db.refresh(existing_interview)
+        return existing_interview
 
     questions = payload.questions
     if not questions:
@@ -50,9 +66,12 @@ def create_interview(
     interview = models.Interview(
         application_id=payload.application_id,
         questions=questions,
-        scheduled_at=datetime.utcnow(),
+        sentiment_data={},
+        scheduled_at=datetime.now(timezone.utc),
     )
     db.add(interview)
+
+    application.current_stage = models.ApplicationStage.ai_interview
 
     if application.student and application.student.user_id:
         notif = models.Notification(
@@ -61,6 +80,13 @@ def create_interview(
             message=f"Interview scheduled for {application.drive.title}"
         )
         db.add(notif)
+
+        log = models.ActivityLog(
+            user_id=application.student.user_id,
+            action=f"Interview scheduled for {application.drive.title}",
+            log_metadata={"drive_id": application.drive.id, "application_id": application.id}
+        )
+        db.add(log)
 
     db.commit()
     db.refresh(interview)
@@ -76,26 +102,25 @@ def get_company_scheduled_interviews(
     if not company:
         raise HTTPException(status_code=404, detail="Company profile not found")
 
-    company_drives = db.query(models.Drive).filter(models.Drive.company_id == company.id).all()
-    drive_ids = [d.id for d in company_drives]
-    if not drive_ids:
-        return []
-
     interviews = (
         db.query(models.Interview)
-        .join(models.Application, models.Interview.application_id == models.Application.id)
-        .join(models.Drive, models.Application.drive_id == models.Drive.id)
-        .join(models.Student, models.Application.student_id == models.Student.id)
-        .filter(models.Drive.id.in_(drive_ids))
+        .join(models.Application)
+        .join(models.Drive)
+        .options(
+            joinedload(models.Interview.application).joinedload(models.Application.student),
+            joinedload(models.Interview.application).joinedload(models.Application.drive),
+            joinedload(models.Interview.application).joinedload(models.Application.scorecard),
+        )
+        .filter(models.Drive.company_id == company.id)
         .order_by(models.Interview.scheduled_at.desc())
         .all()
     )
 
     result = []
     for interview in interviews:
-        student = interview.application.student
-        drive = interview.application.drive
-        scorecard = interview.application.scorecard
+        student = interview.application.student if interview.application else None
+        drive = interview.application.drive if interview.application else None
+        scorecard = interview.application.scorecard if interview.application else None
         result.append({
             "id": interview.id,
             "application_id": interview.application_id,
@@ -113,15 +138,9 @@ def get_company_scheduled_interviews(
     return result
 
 
-class InterviewScheduleRequest(schemas.BaseModel):
-    application_id: str
-    scheduled_at: datetime
-    notes: Optional[str] = None
-
-
-@router.post("/schedule")
+@router.post("/schedule", response_model=schemas.InterviewOut)
 def schedule_candidate_interview(
-    payload: InterviewScheduleRequest,
+    payload: schemas.InterviewScheduleRequest,
     current_user: models.User = Depends(get_current_role(models.UserRole.company)),
     db: Session = Depends(get_db),
 ):
@@ -136,6 +155,18 @@ def schedule_candidate_interview(
     interview = db.query(models.Interview).filter(models.Interview.application_id == payload.application_id).first()
     if interview:
         interview.scheduled_at = payload.scheduled_at
+        if not interview.questions:
+            resume_text = ""
+            if getattr(application.student, "resume_url", None):
+                resume_text = extract_text_from_resume_url(application.student.resume_url)
+            if not resume_text:
+                resume_text = ", ".join(application.student.skills) if application.student.skills else "No skills listed"
+            interview.questions = generate_interview_questions(  # type: ignore[assignment]
+                job_title=application.drive.title,
+                job_description=application.drive.description or "",
+                required_skills=application.drive.eligible_branches or [],
+                resume_text=resume_text
+            )
     else:
         resume_text = ""
         if getattr(application.student, "resume_url", None):
@@ -153,16 +184,27 @@ def schedule_candidate_interview(
         interview = models.Interview(
             application_id=payload.application_id,
             questions=generated_questions,
+            sentiment_data={},
             scheduled_at=payload.scheduled_at,
         )
         db.add(interview)
 
-    notif = models.Notification(
-        user_id=application.student.user_id,
-        type="interview",
-        message=f"Interview scheduled for {application.drive.title} on {payload.scheduled_at.strftime('%b %d, %Y at %I:%M %p')}"
-    )
-    db.add(notif)
+    application.current_stage = models.ApplicationStage.ai_interview
+
+    if application.student and application.student.user_id:
+        notif = models.Notification(
+            user_id=application.student.user_id,
+            type="interview",
+            message=f"Interview scheduled for {application.drive.title} on {payload.scheduled_at.strftime('%b %d, %Y at %I:%M %p')}"
+        )
+        db.add(notif)
+
+        log = models.ActivityLog(
+            user_id=application.student.user_id,
+            action=f"Interview scheduled for {application.drive.title} on {payload.scheduled_at.strftime('%b %d, %Y at %I:%M %p')}",
+            log_metadata={"drive_id": application.drive.id, "application_id": application.id}
+        )
+        db.add(log)
 
     db.commit()
     db.refresh(interview)
@@ -217,7 +259,7 @@ def submit_interview(
 
     interview.transcript = payload.transcript
     interview.sentiment_data = sentiment_data
-    interview.completed_at = datetime.utcnow()
+    interview.completed_at = datetime.now(timezone.utc)
     
     # Optionally move application stage
     interview.application.current_stage = models.ApplicationStage.ai_interview

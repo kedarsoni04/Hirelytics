@@ -412,3 +412,267 @@ def generate_scorecard(student: models.Student, assessment_score: float, intervi
         "ai_summary": ai_summary,
         "ai_insights": ai_insights
     }
+
+
+def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
+    """
+    Extracts text from PDF bytes using pdfplumber.
+    """
+    try:
+        import pdfplumber
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            pages_text = []
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    pages_text.append(text)
+        return "\n".join(pages_text).strip()
+    except Exception as e:
+        print(f"PDF bytes extraction error: {e}")
+        return ""
+
+
+def extract_text_from_csv_bytes(csv_bytes: bytes) -> str:
+    """
+    Extracts structured rows/columns from CSV bytes.
+    """
+    try:
+        import csv
+        text = ""
+        for enc in ["utf-8-sig", "utf-8", "latin-1"]:
+            try:
+                text = csv_bytes.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if not text:
+            return ""
+
+        reader = csv.reader(io.StringIO(text))
+        lines = []
+        for row in reader:
+            cleaned = [col.strip() for col in row if col.strip()]
+            if cleaned:
+                lines.append(" | ".join(cleaned))
+        return "\n".join(lines).strip()
+    except Exception as e:
+        print(f"CSV bytes extraction error: {e}")
+        return ""
+
+
+def extract_text_from_file_bytes(file_bytes: bytes, filename: str) -> str:
+    """
+    Extracts text depending on file extension (.pdf, .csv, .txt).
+    """
+    lower_name = filename.lower()
+    if lower_name.endswith(".pdf"):
+        return extract_text_from_pdf_bytes(file_bytes)
+    elif lower_name.endswith(".csv"):
+        return extract_text_from_csv_bytes(file_bytes)
+    else:
+        for enc in ["utf-8-sig", "utf-8", "latin-1"]:
+            try:
+                return file_bytes.decode(enc).strip()
+            except UnicodeDecodeError:
+                continue
+    return ""
+
+
+def _build_fallback_questions(job_description: str, count: int) -> list[dict]:
+    """
+    Produces deterministic fallback questions if AI services are unavailable.
+    """
+    sample_pool = [
+        {
+            "question": "Which data structure uses the Last In First Out (LIFO) principle?",
+            "options": ["Queue", "Stack", "Binary Tree", "Linked List"],
+            "correct_option": 1
+        },
+        {
+            "question": "What is the average time complexity of searching an element in a balanced Binary Search Tree (BST)?",
+            "options": ["O(1)", "O(n)", "O(log n)", "O(n log n)"],
+            "correct_option": 2
+        },
+        {
+            "question": "In RESTful API design, which HTTP method is typically used to create a new resource?",
+            "options": ["GET", "PUT", "POST", "PATCH"],
+            "correct_option": 2
+        },
+        {
+            "question": "What does the ACID acronym stand for in database management systems?",
+            "options": [
+                "Atomicity, Consistency, Isolation, Durability",
+                "Accuracy, Concurrency, Integrity, Durability",
+                "Atomicity, Concurrency, Indexing, Distribution",
+                "Availability, Consistency, Isolation, Decentralization"
+            ],
+            "correct_option": 0
+        },
+        {
+            "question": "Which of the following is true about asynchronous programming in Python?",
+            "options": [
+                "It requires multi-threading on all CPU cores",
+                "It uses an event loop to run cooperative multitasking tasks",
+                "It completely eliminates the Global Interpreter Lock (GIL)",
+                "It only works with synchronous socket connections"
+            ],
+            "correct_option": 1
+        },
+        {
+            "question": "What is the primary benefit of indexing a column in a relational database?",
+            "options": [
+                "Reduces disk space required for the table",
+                "Accelerates SELECT query performance at the cost of slower write operations",
+                "Ensures every record in the table is unique",
+                "Prevents SQL injection vulnerabilities"
+            ],
+            "correct_option": 1
+        },
+        {
+            "question": "In Git, which command is used to combine changes from one branch into another?",
+            "options": ["git push", "git merge", "git fork", "git checkout"],
+            "correct_option": 1
+        },
+        {
+            "question": "What is a closure in modern programming languages?",
+            "options": [
+                "A function that returns nothing",
+                "A function bundled together with references to its surrounding lexical environment",
+                "A method of terminating background threads",
+                "A design pattern used strictly for database connections"
+            ],
+            "correct_option": 1
+        },
+        {
+            "question": "Which HTTP status code signifies that the requested resource was not found on the server?",
+            "options": ["200 OK", "401 Unauthorized", "403 Forbidden", "404 Not Found"],
+            "correct_option": 3
+        },
+        {
+            "question": "What is the main goal of Continuous Integration (CI)?",
+            "options": [
+                "Manually reviewing code before every release",
+                "Frequently integrating code into a shared repository with automated testing",
+                "Deploying to production only once every quarter",
+                "Replacing automated tests with manual QA scripts"
+            ],
+            "correct_option": 1
+        },
+        {
+            "question": "Which algorithm is commonly used to find the shortest path in a weighted graph with non-negative edges?",
+            "options": ["Dijkstra's Algorithm", "Kruskal's Algorithm", "Breadth-First Search", "Bubble Sort"],
+            "correct_option": 0
+        },
+        {
+            "question": "In object-oriented programming, which principle allows subclasses to provide specific implementations of parent methods?",
+            "options": ["Polymorphism", "Encapsulation", "Abstraction", "Composition"],
+            "correct_option": 0
+        }
+    ]
+    if count <= len(sample_pool):
+        return sample_pool[:count]
+    # If more requested, repeat with slight index variations
+    results = list(sample_pool)
+    while len(results) < count:
+        results.append(sample_pool[len(results) % len(sample_pool)])
+    return results[:count]
+
+
+def generate_assessment_questions_from_file(
+    file_bytes: bytes,
+    filename: str,
+    job_description: str,
+    num_questions: int = 10
+) -> list[dict]:
+    """
+    Parses an uploaded file (CSV, PDF, TXT), feeds the content to Gemini/Groq LLM
+    together with the target Job Description, and generates standardized MCQ assessment questions.
+    """
+    extracted_text = extract_text_from_file_bytes(file_bytes, filename)
+    # Clip text to ~35,000 characters to stay within prompt limits
+    truncated_text = extracted_text[:35000].strip() if extracted_text else "No textual content could be directly extracted from the file."
+
+    prompt = f"""You are an expert technical hiring assessor and exam creator.
+Analyze the following DOCUMENT CONTENT (which contains questions, notes, question pools, syllabus, or technical material) and formulate a professional recruitment assessment.
+
+JOB DESCRIPTION / ROLE CONTEXT:
+{job_description or "General Software Engineering, Technical Fundamentals, and Problem Solving"}
+
+DOCUMENT CONTENT (FROM '{filename}'):
+{truncated_text}
+
+TASK & REQUIREMENTS:
+1. Extract, synthesize, or formulate EXACTLY {num_questions} high-quality Multiple Choice Questions (MCQs) relevant to the role and Job Description.
+2. If the document already contains questions, extract them, clean up typos, and standardize them. If the document contains raw study material or concepts, generate realistic conceptual and scenario-based questions based on it.
+3. Every question MUST have EXACTLY 4 plausible, unambiguous options (A, B, C, D).
+4. Identify the correct option index (0 for Option A, 1 for Option B, 2 for Option C, 3 for Option D).
+5. Ensure options are distinct, informative, and grammatically consistent.
+
+Respond ONLY with a JSON object in this exact format:
+{{
+  "questions": [
+    {{
+      "question": "What is the primary role of an index in PostgreSQL?",
+      "options": [
+        "To enforce foreign key constraints",
+        "To speed up data retrieval queries",
+        "To encrypt sensitive column values",
+        "To compress the underlying disk blocks"
+      ],
+      "correct_option": 1
+    }}
+  ]
+}}"""
+
+    data = _call_llm_json(prompt)
+    raw_questions: list = []
+
+    if isinstance(data, dict) and "questions" in data and isinstance(data["questions"], list):
+        raw_questions = data["questions"]
+    elif isinstance(data, list):
+        raw_questions = data
+
+    cleaned_questions: list[dict] = []
+    for item in raw_questions:
+        if not isinstance(item, dict):
+            continue
+        q_text = str(item.get("question", "")).strip()
+        opts = item.get("options", [])
+        if not q_text or not isinstance(opts, (list, tuple)):
+            continue
+        
+        # Clean options to strings
+        cleaned_opts = [str(o).strip() for o in opts if str(o).strip()]
+        if len(cleaned_opts) < 4:
+            # Pad to 4 options
+            while len(cleaned_opts) < 4:
+                cleaned_opts.append(f"Option {chr(65 + len(cleaned_opts))}")
+        elif len(cleaned_opts) > 4:
+            cleaned_opts = cleaned_opts[:4]
+
+        # Validate correct_option
+        corr_opt = item.get("correct_option", 0)
+        try:
+            corr_opt = int(corr_opt)
+            if corr_opt < 0 or corr_opt >= 4:
+                corr_opt = 0
+        except (ValueError, TypeError):
+            corr_opt = 0
+
+        cleaned_questions.append({
+            "question": q_text,
+            "options": cleaned_opts,
+            "correct_option": corr_opt
+        })
+
+    if len(cleaned_questions) >= num_questions:
+        return cleaned_questions[:num_questions]
+    elif len(cleaned_questions) > 0:
+        # If model returned fewer than requested, fill remainder from fallback
+        needed = num_questions - len(cleaned_questions)
+        extra = _build_fallback_questions(job_description, needed)
+        return cleaned_questions + extra
+
+    # If completely empty or LLM failed, fallback gracefully
+    return _build_fallback_questions(job_description, num_questions)

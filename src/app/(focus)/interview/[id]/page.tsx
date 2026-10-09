@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Trophy,
   ArrowRight,
-  Volume2
+  Volume2,
+  Keyboard,
+  Edit3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -221,7 +223,12 @@ export default function InterviewPage() {
       setState("recording");
     } catch (err) {
       console.error("Microphone access error:", err);
-      alert("Microphone access is required to record your answer.");
+      // Fallback gracefully so candidate is never blocked
+      setState("done");
+      setRecordedTranscripts((prev) => ({
+        ...prev,
+        [currentQuestionIndex]: prev[currentQuestionIndex] || "",
+      }));
     }
   };
 
@@ -233,6 +240,16 @@ export default function InterviewPage() {
 
   const handleRetake = () => {
     setState("idle");
+  };
+
+  const handleTypeInstead = () => {
+    setState("done");
+    if (!recordedTranscripts[currentQuestionIndex]) {
+      setRecordedTranscripts((prev) => ({
+        ...prev,
+        [currentQuestionIndex]: "",
+      }));
+    }
   };
 
   const handleNext = async () => {
@@ -299,7 +316,17 @@ export default function InterviewPage() {
                 >
                   <Play className="size-5 fill-white" /> Start Recording
                 </Button>
-                <p className="text-xs text-muted-foreground">Take a deep breath. Speak clearly into your microphone.</p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleTypeInstead}
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                  >
+                    <Keyboard className="size-3.5" /> Type answer manually instead
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">Speak clearly into your microphone, or choose to type your response.</p>
               </>
             )}
 
@@ -337,35 +364,51 @@ export default function InterviewPage() {
             )}
 
             {state === "done" && (
-              <div className="flex flex-col items-center w-full max-w-xs gap-3">
-                <div className="flex items-center gap-2 text-emerald-600 mb-2">
-                  <CheckCircle2 className="size-5" />
-                  <span className="font-semibold text-sm">Response Transcribed</span>
+              <div className="flex flex-col items-center w-full max-w-sm gap-3">
+                <div className="flex items-center gap-2 text-emerald-600 mb-1">
+                  <CheckCircle2 className="size-4" />
+                  <span className="font-semibold text-xs uppercase tracking-wide">Candidate Response</span>
                 </div>
                 
-                {/* Transcript preview */}
-                <div className="w-full text-left bg-gray-50 p-3 rounded-lg border text-sm max-h-32 overflow-y-auto mb-2 text-gray-700">
-                  <p className="text-xs font-semibold text-gray-500 mb-1">Transcript:</p>
-                  &quot;{recordedTranscripts[currentQuestionIndex]}&quot;
+                {/* Editable Transcript preview */}
+                <div className="w-full text-left bg-gray-50/80 p-3 rounded-xl border border-gray-200/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
+                      <Edit3 className="size-3 text-indigo-500" /> Answer Transcript (Editable)
+                    </p>
+                    <span className="text-[10px] text-muted-foreground">Review before next</span>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={recordedTranscripts[currentQuestionIndex] ?? ""}
+                    onChange={(e) =>
+                      setRecordedTranscripts((prev) => ({
+                        ...prev,
+                        [currentQuestionIndex]: e.target.value,
+                      }))
+                    }
+                    placeholder="Type or refine your response to this interview question..."
+                    className="w-full bg-white p-2.5 rounded-lg border border-gray-200 text-xs text-gray-800 leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
                 </div>
 
                 <Button
                   onClick={handleNext}
                   disabled={submitting}
                   size="lg"
-                  className="w-full rounded-full font-bold brand-gradient text-white shadow-lg shadow-indigo-500/20 gap-2 h-12 hover:opacity-90 transition-opacity"
+                  className="w-full rounded-full font-bold brand-gradient text-white shadow-lg shadow-indigo-500/20 gap-2 h-11 hover:opacity-90 transition-opacity mt-1"
                 >
                   {submitting ? (
                     <>
-                      <Loader2 className="size-4 animate-spin" /> Submitting...
+                      <Loader2 className="size-4 animate-spin" /> Submitting to AI...
                     </>
                   ) : currentQuestionIndex < total - 1 ? (
                     <>
-                      Next Question <ChevronRight className="size-5" />
+                      Next Question <ChevronRight className="size-4" />
                     </>
                   ) : (
                     <>
-                      Finish & Submit <CheckCircle2 className="size-5" />
+                      Finish & Submit Interview <CheckCircle2 className="size-4" />
                     </>
                   )}
                 </Button>
@@ -374,9 +417,9 @@ export default function InterviewPage() {
                   disabled={submitting}
                   variant="ghost"
                   size="sm"
-                  className="w-full rounded-full gap-2 text-xs"
+                  className="w-full rounded-full gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 >
-                  <RotateCcw className="size-3.5" /> Retake Answer
+                  <RotateCcw className="size-3" /> Record with Mic Again
                 </Button>
               </div>
             )}

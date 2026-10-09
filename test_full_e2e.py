@@ -49,7 +49,8 @@ def run_full_end_to_end_test():
         "college": "National Institute of Technology",
         "branch": "Computer Science & Engineering",
         "cgpa": 9.4,
-        "skills": ["Python", "FastAPI", "React", "Docker", "PostgreSQL", "Machine Learning"]
+        "skills": ["Python", "FastAPI", "React", "Docker", "PostgreSQL", "Machine Learning"],
+        "resume_url": "https://res.cloudinary.com/demo/image/upload/sample.pdf"
     }, headers=stud_headers)
     assert res_prof.status_code == 200
 

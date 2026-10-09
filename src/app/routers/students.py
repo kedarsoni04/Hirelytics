@@ -23,6 +23,7 @@ class StudentProfileUpdate(BaseModel):
     branch: Optional[str] = None
     cgpa: Optional[float] = None
     skills: Optional[List[str]] = None
+    resume_url: Optional[str] = None
     linkedin_url: Optional[str] = None
     github_url: Optional[str] = None
     portfolio_url: Optional[str] = None

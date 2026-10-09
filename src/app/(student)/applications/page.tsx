@@ -18,13 +18,14 @@ import {
   TrendingUp,
   Calendar,
   CheckCircle2,
+  Video,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 
-type AppStage = "applied" | "ai_screened" | "assessment" | "interview" | "shortlisted" | "offer" | "rejected" | "withdrawn";
+type AppStage = "applied" | "ai_screened" | "assessment" | "ai_interview" | "shortlisted" | "offer" | "rejected" | "withdrawn";
 
 interface ApplicationDrive {
   id?: string;
@@ -47,6 +48,10 @@ interface Application {
   has_assessment?: boolean;
   assessment_completed?: boolean;
   assessment_score?: number | null;
+  has_interview?: boolean;
+  interview_completed?: boolean;
+  interview_scheduled_at?: string | null;
+  interview_id?: string | null;
 }
 
 
@@ -83,8 +88,8 @@ const stageConfig: Record<
     icon: FileText,
     dot: "#F59E0B",
   },
-  interview: {
-    label: "Interview",
+  ai_interview: {
+    label: "AI Interview",
     bg: "#DBEAFE",
     text: "#1E40AF",
     icon: Calendar,
@@ -122,7 +127,7 @@ const stageConfig: Record<
 
 // ── Stage summary counts ──────────────────────────────────────────────────────
 
-const summaryStages: AppStage[] = ["applied", "ai_screened", "assessment", "interview", "shortlisted", "offer", "rejected"];
+const summaryStages: AppStage[] = ["applied", "ai_screened", "assessment", "ai_interview", "shortlisted", "offer", "rejected"];
 
 function getStageCounts(applications: Application[]) {
   return summaryStages.map((stage) => ({
@@ -324,11 +329,23 @@ export default function ApplicationsPage() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {app.drive?.company_name} · {app.drive?.package || "N/A"}
                   </p>
-                  {isActive && (
+                  {app.has_interview && !app.interview_completed ? (
+                    <div className="mt-1">
+                      {app.interview_scheduled_at ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
+                          <Calendar className="size-3" /> Interview: {new Date(app.interview_scheduled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "numeric" })}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
+                          <Sparkles className="size-3" /> AI Interview Ready
+                        </span>
+                      )}
+                    </div>
+                  ) : isActive ? (
                     <p className="text-xs tracking-tight text-muted-foreground/70 mt-1 flex items-center gap-1">
                       <Clock className="size-3" /> Updated {formatDate(app.updated_at)}
                     </p>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Applied date */}
@@ -373,6 +390,21 @@ export default function ApplicationsPage() {
                       </Link>
                     )
                   )}
+
+                  {app.has_interview && (
+                    app.interview_completed ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 border border-violet-200 text-violet-700 whitespace-nowrap">
+                        <CheckCircle2 className="size-3" /> Interview Done
+                      </span>
+                    ) : (
+                      <Link href={`/interview/${app.id}`}>
+                        <Button size="sm" className="h-7 px-2.5 text-xs font-semibold bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-sm gap-1 whitespace-nowrap animate-pulse">
+                          <Video className="size-3" /> Take AI Interview
+                        </Button>
+                      </Link>
+                    )
+                  )}
+
                   {isActive ? (
                     <Link href={`/drives/${app.drive_id}`}>
                       <Button variant="ghost" size="sm" className="text-xs gap-1 h-7 group-hover:bg-accent">
@@ -412,6 +444,21 @@ export default function ApplicationsPage() {
                         <Link href={`/assessment/${app.id}`} className="w-full">
                           <Button size="sm" className="w-full h-8 text-xs font-semibold bg-[#4F46E5] hover:bg-[#4338CA] text-white gap-1.5">
                             <FileText className="size-3.5" /> Take Assessment
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                  {app.has_interview && (
+                    <div className="flex items-center justify-end">
+                      {app.interview_completed ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 border border-violet-200 text-violet-700">
+                          <CheckCircle2 className="size-3" /> Interview Done
+                        </span>
+                      ) : (
+                        <Link href={`/interview/${app.id}`} className="w-full">
+                          <Button size="sm" className="w-full h-8 text-xs font-semibold bg-[#7C3AED] hover:bg-[#6D28D9] text-white gap-1.5 shadow-sm">
+                            <Video className="size-3.5" /> Take AI Interview
                           </Button>
                         </Link>
                       )}

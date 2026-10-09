@@ -6,7 +6,6 @@ import { useParams } from "next/navigation";
 import {
   MapPin,
   Clock,
-  Users,
   Briefcase,
   ChevronRight,
   Sparkles,
@@ -18,11 +17,14 @@ import {
   IndianRupee,
   CalendarDays,
   Shield,
-  Gift,
   Loader2,
   AlertCircle,
   XCircle,
   FileText,
+  Video,
+  Upload,
+  LockKeyhole,
+  Timer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,12 +55,17 @@ type Application = {
   id: string;
   drive_id: string;
   drive?: { id: string };
+  has_interview?: boolean;
+  interview_completed?: boolean;
+  interview_scheduled_at?: string | null;
   [key: string]: unknown;
 };
 
 type Assessment = {
   questions: unknown[];
   duration_mins: number;
+  assessment_start?: string | null;
+  assessment_end?: string | null;
   [key: string]: unknown;
 };
 
@@ -124,6 +131,30 @@ function companyDisplay(drive: Drive) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+/** Returns a human-friendly label for the assessment window relative to now. */
+function assessmentWindowStatus(assessment: Assessment | null): "not_set" | "upcoming" | "open" | "closed" {
+  if (!assessment) return "not_set";
+  const now = Date.now();
+  const start = assessment.assessment_start ? new Date(assessment.assessment_start).getTime() : null;
+  const end = assessment.assessment_end ? new Date(assessment.assessment_end).getTime() : null;
+
+  if (!start && !end) return "open"; // no time restriction set
+  if (start && now < start) return "upcoming";
+  if (end && now > end) return "closed";
+  return "open";
+}
+
+function formatWindowDate(iso: string | null | undefined) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function DriveDetailPage() {
   const params = useParams();
   const driveId = params?.driveId as string;
@@ -137,6 +168,9 @@ export default function DriveDetailPage() {
   const [existingApp, setExistingApp] = useState<Application | null>(null);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [submission, setSubmission] = useState<Submission | null>(null);
+  const [studentResumeUrl, setStudentResumeUrl] = useState<string | null>(null);
+  /** "upcoming" = window not opened yet, "closed" = window ended */
+  const [assessmentWindowBlock, setAssessmentWindowBlock] = useState<"upcoming" | "closed" | null>(null);
 
   useEffect(() => {
     if (!driveId) return;
@@ -146,6 +180,14 @@ export default function DriveDetailPage() {
         setError(null);
         const data = await api.getDrive(driveId);
         setDrive(data);
+
+        // Fetch student profile to check for resume
+        try {
+          const me = await api.getMe();
+          setStudentResumeUrl(me?.student_profile?.resume_url ?? null);
+        } catch {
+          // ignore — not logged in or not a student
+        }
 
         // Check if student already applied
         try {
@@ -165,13 +207,22 @@ export default function DriveDetailPage() {
         }
 
         // Check if drive has an assessment
+        // NOTE: the backend will return 403 if the window hasn't opened yet;
+        // we catch that and store null so the UI can show the upcoming state.
         try {
           const assess = await api.getDriveAssessment(driveId);
           if (assess && assess.questions && assess.questions.length > 0) {
             setAssessment(assess);
           }
-        } catch {
-          // No assessment for this drive yet
+        } catch (assessErr: unknown) {
+          // Check if backend told us the window isn't open yet or is closed (403)
+          const msg = assessErr instanceof Error ? assessErr.message : "";
+          if (msg.toLowerCase().includes("has not opened yet") || msg.toLowerCase().includes("not opened")) {
+            setAssessmentWindowBlock("upcoming");
+          } else if (msg.toLowerCase().includes("window has closed") || msg.toLowerCase().includes("deadline")) {
+            setAssessmentWindowBlock("closed");
+          }
+          // otherwise: no assessment configured for this drive yet
         }
       } catch (err: unknown) {
         console.error("[Drive Detail] API error:", err);
@@ -194,6 +245,15 @@ export default function DriveDetailPage() {
 
   const handleApply = async () => {
     if (!drive) return;
+
+    // Guard: resume is mandatory for the first stage (resume screening)
+    if (!studentResumeUrl) {
+      setApplyError(
+        "A resume is required to apply. Please upload your resume from your Profile page before applying."
+      );
+      return;
+    }
+
     try {
       setApplying(true);
       setApplyError(null);
@@ -537,57 +597,154 @@ export default function DriveDetailPage() {
                         <CheckCircle2 className="size-4" /> Application Submitted ✓
                       </div>
 
-                      {assessment ? (
-                        submission ? (
-                          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
-                            <p className="text-xs font-bold text-emerald-800 flex items-center justify-center gap-1.5">
-                              <CheckCircle2 className="size-4 text-emerald-600" />
-                              Assessment Completed ({Math.round(submission.score ?? 0)}%)
+                      {/* AI Video Interview Section if scheduled */}
+                      {Boolean(existingApp?.has_interview) && (
+                        existingApp?.interview_completed ? (
+                          <div className="p-3.5 rounded-xl bg-violet-50 border border-violet-200 text-center space-y-1.5">
+                            <p className="text-xs font-bold text-violet-800 flex items-center justify-center gap-1.5">
+                              <CheckCircle2 className="size-4 text-violet-600" />
+                              AI Video Interview Completed ✓
                             </p>
-                            <Link href={`/assessment/${existingApp?.id || driveId}`}>
-                              <Button variant="outline" size="sm" className="w-full text-xs h-8">
-                                View Result
-                              </Button>
-                            </Link>
+                            <p className="text-[11px] text-muted-foreground">
+                              Interview responses submitted for AI evaluation.
+                            </p>
                           </div>
                         ) : (
-                          <div className="p-3.5 rounded-xl bg-[#EEF2FF] border border-[#C7D2FE] space-y-2.5 text-center">
+                          <div className="p-3.5 rounded-xl bg-[#EDE9FE] border border-[#DDD6FE] space-y-2.5 text-center">
                             <div>
-                              <p className="text-xs font-bold text-[#3730A3]">
-                                Technical Assessment Ready
+                              <p className="text-xs font-bold text-[#5B21B6] flex items-center justify-center gap-1.5">
+                                <Sparkles className="size-3.5 text-purple-600" /> AI Video Interview Scheduled
                               </p>
-                              <p className="text-[11px] text-muted-foreground mt-0.5">
-                                {assessment.questions?.length ?? 0} questions · {assessment.duration_mins} mins
-                              </p>
+                              {existingApp?.interview_scheduled_at && (
+                                <p className="text-[11px] text-purple-700 font-medium mt-1">
+                                  {new Date(existingApp.interview_scheduled_at as string).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "numeric",
+                                    minute: "numeric",
+                                  })}
+                                </p>
+                              )}
                             </div>
-                            <Link href={`/assessment/${existingApp?.id || driveId}`}>
-                              <Button className="w-full brand-gradient text-white font-semibold text-xs shadow-sm gap-1.5 animate-pulse">
-                                <FileText className="size-3.5" /> Take Assessment Now
+                            <Link href={`/interview/${existingApp?.id}`}>
+                              <Button className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-xs shadow-sm gap-1.5 animate-pulse">
+                                <Video className="size-3.5" /> Start AI Interview Now
                               </Button>
                             </Link>
                           </div>
                         )
-                      ) : (
-                        <div className="p-3 rounded-lg bg-muted text-center text-xs text-muted-foreground">
-                          Assessment not published for this drive yet.
-                        </div>
                       )}
+
+                      {/* Assessment block — time-gated */}
+                      {(() => {
+                        const winStatus = assessmentWindowBlock ?? assessmentWindowStatus(assessment);
+                        if (submission) {
+                          return (
+                            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
+                              <p className="text-xs font-bold text-emerald-800 flex items-center justify-center gap-1.5">
+                                <CheckCircle2 className="size-4 text-emerald-600" />
+                                Assessment Completed ({Math.round(submission.score ?? 0)}%)
+                              </p>
+                              <Link href={`/assessment/${existingApp?.id || driveId}`}>
+                                <Button variant="outline" size="sm" className="w-full text-xs h-8">
+                                  View Result
+                                </Button>
+                              </Link>
+                            </div>
+                          );
+                        }
+                        if (winStatus === "upcoming") {
+                          return (
+                            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-1.5 text-center">
+                              <p className="text-xs font-bold text-amber-800 flex items-center justify-center gap-1.5">
+                                <Timer className="size-3.5 text-amber-600" /> Assessment Not Yet Open
+                              </p>
+                              {assessment?.assessment_start && (
+                                <p className="text-[11px] text-amber-700">
+                                  Opens on {formatWindowDate(assessment.assessment_start as string | null)}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-muted-foreground">
+                                The assessment window opens after the registration deadline ends.
+                              </p>
+                            </div>
+                          );
+                        }
+                        if (winStatus === "closed") {
+                          return (
+                            <div className="p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-center space-y-1">
+                              <p className="text-xs font-bold text-slate-600 flex items-center justify-center gap-1.5">
+                                <LockKeyhole className="size-3.5" /> Assessment Window Closed
+                              </p>
+                              {assessment?.assessment_end && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  Closed on {formatWindowDate(assessment.assessment_end as string | null)}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }
+                        if (winStatus === "open" && assessment) {
+                          return (
+                            <div className="p-3.5 rounded-xl bg-[#EEF2FF] border border-[#C7D2FE] space-y-2.5 text-center">
+                              <div>
+                                <p className="text-xs font-bold text-[#3730A3]">
+                                  Technical Assessment Live
+                                </p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  {assessment.questions?.length ?? 0} questions · {assessment.duration_mins} mins
+                                </p>
+                                {assessment.assessment_end && (
+                                  <p className="text-[10px] text-rose-500 font-medium mt-0.5">
+                                    Closes {formatWindowDate(assessment.assessment_end as string | null)}
+                                  </p>
+                                )}
+                              </div>
+                              <Link href={`/assessment/${existingApp?.id || driveId}`}>
+                                <Button className="w-full brand-gradient text-white font-semibold text-xs shadow-sm gap-1.5 animate-pulse">
+                                  <FileText className="size-3.5" /> Take Assessment Now
+                                </Button>
+                              </Link>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   ) : (
-                    <Button 
-                      className="w-full brand-gradient text-white font-semibold hover:opacity-90 transition-opacity"
-                      onClick={handleApply}
-                      disabled={applying}
-                    >
-                      {applying ? (
-                        <>
-                          <Loader2 className="size-4 mr-2 animate-spin" />
-                          Applying...
-                        </>
-                      ) : (
-                        "Apply Now"
+                    <div className="space-y-3">
+                      {/* Resume gate warning */}
+                      {!studentResumeUrl && (
+                        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-2">
+                          <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+                            <Upload className="size-3.5" /> Resume Required
+                          </p>
+                          <p className="text-[11px] text-amber-700 leading-relaxed">
+                            You must upload a resume before applying. Resume screening is the first stage of the selection process.
+                          </p>
+                          <Link href="/resume">
+                            <Button size="sm" variant="outline" className="w-full text-xs h-7 border-amber-300 text-amber-800 hover:bg-amber-100">
+                              Upload Resume →
+                            </Button>
+                          </Link>
+                        </div>
                       )}
-                    </Button>
+                      <Button 
+                        className="w-full brand-gradient text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                        onClick={handleApply}
+                        disabled={applying || !studentResumeUrl}
+                        title={!studentResumeUrl ? "Upload your resume first" : undefined}
+                      >
+                        {applying ? (
+                          <>
+                            <Loader2 className="size-4 mr-2 animate-spin" />
+                            Applying...
+                          </>
+                        ) : (
+                          "Apply Now"
+                        )}
+                      </Button>
+                    </div>
                   )}
                   <Button variant="outline" className="w-full text-xs">
                     Save Drive

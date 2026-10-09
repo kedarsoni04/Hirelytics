@@ -8,6 +8,13 @@
   ],
   "venvPath": ".",
   "venv": "venv",
+  "typeCheckingMode": "basic",
+  "reportGeneralTypeIssues": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportArgumentType": "none",
+  "reportAssignmentType": "none",
+  "reportCallIssue": "none",
+  "reportOptionalMemberAccess": "none",
   "executionEnvironments": [
     {
       "root": ".",

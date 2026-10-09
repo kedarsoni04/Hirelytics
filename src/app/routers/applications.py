@@ -42,6 +42,10 @@ class ApplicationDetailOut(schemas.ApplicationOut):
     has_assessment: Optional[bool] = False
     assessment_completed: Optional[bool] = False
     assessment_score: Optional[float] = None
+    has_interview: Optional[bool] = False
+    interview_completed: Optional[bool] = False
+    interview_scheduled_at: Optional[datetime] = None
+    interview_id: Optional[str] = None
 
 
 def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
@@ -85,6 +89,12 @@ def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
         else None
     )
 
+    interview_obj = getattr(app_obj, "interview", None)
+    has_interview = bool(interview_obj is not None)
+    interview_completed = bool(interview_obj and interview_obj.completed_at is not None)
+    interview_scheduled_at = interview_obj.scheduled_at if interview_obj else None
+    interview_id = str(interview_obj.id) if interview_obj else None
+
     return {
         "id": app_obj.id,
         "student_id": app_obj.student_id,
@@ -98,6 +108,10 @@ def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
         "has_assessment": has_assessment,
         "assessment_completed": assessment_completed,
         "assessment_score": assessment_score,
+        "has_interview": has_interview,
+        "interview_completed": interview_completed,
+        "interview_scheduled_at": interview_scheduled_at,
+        "interview_id": interview_id,
     }
 
 
@@ -120,6 +134,13 @@ def apply_to_drive(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot apply to a drive that is not live",
+        )
+
+    # Resume is mandatory — it is the first stage of the selection process
+    if not student.resume_url:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A resume is required to apply. Please upload your resume from your profile before applying.",
         )
 
     existing = (
@@ -185,8 +206,11 @@ def get_my_applications(
         db.query(models.Application)
         .options(
             joinedload(models.Application.drive).joinedload(models.Drive.company),
+            joinedload(models.Application.drive).joinedload(models.Drive.assessment),
             joinedload(models.Application.student),
             joinedload(models.Application.scorecard),
+            joinedload(models.Application.interview),
+            joinedload(models.Application.assessment_submission),
         )
         .filter(models.Application.student_id == student.id)
         .order_by(models.Application.applied_at.desc())
@@ -217,7 +241,14 @@ def get_applications_for_drive(
 
     applications = (
         db.query(models.Application)
-        .options(joinedload(models.Application.drive).joinedload(models.Drive.company), joinedload(models.Application.student))
+        .options(
+            joinedload(models.Application.drive).joinedload(models.Drive.company),
+            joinedload(models.Application.drive).joinedload(models.Drive.assessment),
+            joinedload(models.Application.student),
+            joinedload(models.Application.scorecard),
+            joinedload(models.Application.interview),
+            joinedload(models.Application.assessment_submission),
+        )
         .filter(models.Application.drive_id == drive.id)
         .order_by(models.Application.applied_at.desc())
         .all()

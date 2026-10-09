@@ -102,6 +102,10 @@ export const api = {
   getDriveAssessment: (driveId: string) => fetchAPI(`/assessments/drive/${driveId}`, { method: 'GET' }),
   createAssessment: (data: { drive_id: string; questions: Record<string, unknown>[]; duration_mins: number }) =>
     fetchAPI('/assessments', { method: 'POST', body: JSON.stringify(data) }),
+  updateAssessment: (driveId: string, data: { questions: Record<string, unknown>[]; duration_mins: number }) =>
+    fetchAPI(`/assessments/drive/${driveId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  generateAssessmentQuestionsFromFile: (formData: FormData) =>
+    fetchAPI('/assessments/generate-from-file', { method: 'POST', body: formData }),
   submitAssessment: (data: { application_id: string; answers: { question_id: number; selected_option: number }[]; proctor_flags: unknown[] }) =>
     fetchAPI('/assessments/submit', { method: 'POST', body: JSON.stringify(data) }),
   getAssessmentSubmission: (applicationId: string) => fetchAPI(`/assessments/submission/${applicationId}`, { method: 'GET' }),

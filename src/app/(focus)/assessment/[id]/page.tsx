@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,9 +19,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import OptionCard from "@/components/assessment/OptionCard";
 import QuestionPalette from "@/components/assessment/QuestionPalette";
 import CountdownTimer from "@/components/assessment/CountdownTimer";
+import ProctorWarningModal from "@/components/assessment/ProctorWarningModal";
+import { useProctor } from "@/lib/useProctor";
 import { api } from "@/lib/api";
 import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 import type { QuestionStatus } from "@/lib/types";
+
+/** Max tab-switch / window-blur violations before the exam is force-submitted */
+const MAX_VIOLATIONS = 3;
 
 type AssessmentQuestion = {
   id?: number;
@@ -35,6 +40,8 @@ type AssessmentData = {
   drive_id: string;
   questions: AssessmentQuestion[];
   duration_mins: number;
+  assessment_start?: string | null;
+  assessment_end?: string | null;
 };
 
 type SubmissionResult = {
@@ -58,6 +65,8 @@ export default function AssessmentPage() {
   const [driveTitle, setDriveTitle] = useState<string>("Technical Assessment");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** "upcoming" = window not opened yet, "closed" = window ended, null = no window issue */
+  const [windowStatus, setWindowStatus] = useState<"upcoming" | "closed" | null>(null);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -65,6 +74,26 @@ export default function AssessmentPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
+
+  // ── Anti-cheat: proctoring ────────────────────────────────────────────────
+  // handleForceSubmit is defined after state, so we forward-declare via ref pattern
+  const forceSubmitRef = useRef<(() => void) | undefined>(undefined);
+  const handleForceSubmit = useCallback(() => {
+    forceSubmitRef.current?.();
+  }, []);
+
+  const {
+    proctorFlags,
+    violationCount,
+    showWarning,
+    lastViolation,
+    dismissWarning,
+  } = useProctor({
+    maxViolations: MAX_VIOLATIONS,
+    onForceSubmit: handleForceSubmit,
+    // Disable proctoring once submitted or while still loading
+    enabled: !submissionResult && !loading,
+  });
 
   useEffect(() => {
     if (!rawId) return;
@@ -107,8 +136,20 @@ export default function AssessmentPage() {
         setApplicationId(resolvedAppId);
 
         // Fetch assessment for drive
-        const assessData = await api.getDriveAssessment(resolvedDriveId);
-        setAssessment(assessData);
+        try {
+          const assessData = await api.getDriveAssessment(resolvedDriveId);
+          setAssessment(assessData);
+        } catch (fetchErr: unknown) {
+          // Check if backend told us the window isn't open yet or already closed
+          const msg = fetchErr instanceof Error ? fetchErr.message : "";
+          if (msg.toLowerCase().includes("has not opened yet") || msg.toLowerCase().includes("not opened")) {
+            setWindowStatus("upcoming");
+          } else if (msg.toLowerCase().includes("window has closed") || msg.toLowerCase().includes("deadline")) {
+            setWindowStatus("closed");
+          } else {
+            throw fetchErr; // re-throw so the outer catch sets error
+          }
+        }
 
         // Check if student already submitted this assessment previously
         if (resolvedAppId) {
@@ -132,11 +173,101 @@ export default function AssessmentPage() {
     loadAssessmentData();
   }, [rawId]);
 
+  const handleSubmit = useCallback(async (opts?: { force?: boolean }) => {
+    if (!applicationId) {
+      if (!opts?.force) alert("Application ID could not be identified for submission.");
+      return;
+    }
+
+    // Manual submission: ask for confirmation. Force-submit skips the prompt.
+    if (!opts?.force) {
+      const total = assessment?.questions.length ?? 0;
+      const confirmSubmit = window.confirm(
+        `Are you sure you want to submit? You have answered ${
+          Object.keys(selectedAnswers).length
+        } of ${total} questions.`
+      );
+      if (!confirmSubmit) return;
+    }
+
+    try {
+      setSubmitting(true);
+      const answersPayload = Object.entries(selectedAnswers).map(([qIdx, selectedOpt]) => ({
+        question_id: parseInt(qIdx, 10),
+        selected_option: selectedOpt,
+      }));
+
+      const res = await api.submitAssessment({
+        application_id: applicationId,
+        answers: answersPayload,
+        proctor_flags: proctorFlags,
+      });
+
+      setSubmissionResult(res);
+      dispatchNotificationsUpdated();
+    } catch (err: unknown) {
+      console.error("[Submit Assessment] Error:", err);
+      if (!opts?.force) alert(err instanceof Error ? err.message : "Failed to submit assessment.");
+    } finally {
+      setSubmitting(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applicationId, selectedAnswers, proctorFlags, assessment]);
+
+  // Wire force-submit into the ref so useProctor can call it
+  useEffect(() => {
+    forceSubmitRef.current = () => handleSubmit({ force: true });
+  }, [handleSubmit]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
         <Loader2 className="size-8 animate-spin text-[#4F46E5]" />
         <p className="text-sm text-muted-foreground">Loading assessment questions…</p>
+      </div>
+    );
+  }
+
+  // Assessment window hasn't opened yet
+  if (windowStatus === "upcoming") {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6">
+        <Card className="border-amber-200 bg-amber-50 max-w-lg w-full">
+          <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
+            <AlertCircle className="size-8 text-amber-500" />
+            <h2 className="text-base font-bold text-amber-800">Assessment Not Yet Open</h2>
+            <p className="text-xs text-amber-700">
+              The assessment window opens after the registration deadline ends. Please check back later.
+            </p>
+            <Link href="/applications">
+              <Button size="sm" variant="outline" className="text-xs mt-3">
+                Back to My Applications
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Assessment window has closed
+  if (windowStatus === "closed") {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6">
+        <Card className="border-slate-200 bg-slate-50 max-w-lg w-full">
+          <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
+            <AlertCircle className="size-8 text-slate-500" />
+            <h2 className="text-base font-bold text-slate-700">Assessment Window Closed</h2>
+            <p className="text-xs text-slate-600">
+              The deadline to take this assessment has passed. Submissions are no longer accepted.
+            </p>
+            <Link href="/applications">
+              <Button size="sm" variant="outline" className="text-xs mt-3">
+                Back to My Applications
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -274,41 +405,7 @@ export default function AssessmentPage() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!applicationId) {
-      alert("Application ID could not be identified for submission.");
-      return;
-    }
 
-    const confirmSubmit = window.confirm(
-      `Are you sure you want to submit? You have answered ${
-        Object.keys(selectedAnswers).length
-      } of ${total} questions.`
-    );
-    if (!confirmSubmit) return;
-
-    try {
-      setSubmitting(true);
-      const answersPayload = Object.entries(selectedAnswers).map(([qIdx, selectedOpt]) => ({
-        question_id: parseInt(qIdx, 10),
-        selected_option: selectedOpt,
-      }));
-
-      const res = await api.submitAssessment({
-        application_id: applicationId,
-        answers: answersPayload,
-        proctor_flags: [],
-      });
-
-      setSubmissionResult(res);
-      dispatchNotificationsUpdated();
-    } catch (err: unknown) {
-      console.error("[Submit Assessment] Error:", err);
-      alert(err instanceof Error ? err.message : "Failed to submit assessment.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   // Build statuses map for QuestionPalette (1-indexed)
   const statuses: Record<number, QuestionStatus> = {};
@@ -325,6 +422,16 @@ export default function AssessmentPage() {
 
   return (
     <div className="flex h-full">
+      {/* ── Anti-cheat: Proctor warning modal ── */}
+      {showWarning && (
+        <ProctorWarningModal
+          violationCount={violationCount}
+          maxViolations={MAX_VIOLATIONS}
+          lastViolation={lastViolation}
+          onDismiss={dismissWarning}
+          forceSubmitting={submitting && violationCount >= MAX_VIOLATIONS}
+        />
+      )}
       {/* ── Main Question Area ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Top contextual bar */}
@@ -346,9 +453,20 @@ export default function AssessmentPage() {
           </div>
 
           <div className="flex items-center gap-6">
-            <span className="inline-flex items-center gap-1.5 text-xs tracking-tight font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
-              <ShieldCheck className="size-3.5" /> Proctoring Active
-            </span>
+            <span
+                className={`inline-flex items-center gap-1.5 text-xs tracking-tight font-medium px-2.5 py-1 rounded-md border transition-colors ${
+                  violationCount === 0
+                    ? "text-emerald-600 bg-emerald-50 border-emerald-100"
+                    : violationCount < MAX_VIOLATIONS
+                    ? "text-amber-700 bg-amber-50 border-amber-200"
+                    : "text-red-700 bg-red-50 border-red-200"
+                }`}
+              >
+                <ShieldCheck className="size-3.5" />
+                {violationCount === 0
+                  ? "Proctoring Active"
+                  : `${violationCount}/${MAX_VIOLATIONS} Violations`}
+              </span>
             <CountdownTimer initialSeconds={(assessment.duration_mins || 30) * 60} />
           </div>
         </div>
@@ -408,7 +526,7 @@ export default function AssessmentPage() {
               </Button>
             ) : (
               <Button
-                onClick={handleSubmit}
+                onClick={() => handleSubmit()}
                 disabled={submitting}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 px-6 text-xs font-semibold"
               >
@@ -442,7 +560,7 @@ export default function AssessmentPage() {
             variant="destructive"
             disabled={submitting}
             className="w-full text-xs font-bold"
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
           >
             {submitting ? "Submitting..." : "Submit Assessment"}
           </Button>

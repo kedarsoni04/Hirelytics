@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -20,6 +20,14 @@ import {
   Plus,
   Trash2,
   X,
+  Upload,
+  FileSpreadsheet,
+  FileText,
+  Wand2,
+  Edit3,
+  Check,
+  HelpCircle,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -110,6 +118,12 @@ interface MCQQuestion {
   correct_option: number; // 0–3
 }
 
+interface RawQuestionInput {
+  question?: string;
+  options?: string[];
+  correct_option?: number;
+}
+
 function makeBlankQuestion(): MCQQuestion {
   return { question: "", options: ["", "", "", ""], correct_option: 0 };
 }
@@ -140,6 +154,7 @@ type CandidateApplication = {
 type DriveData = {
   id: string;
   title: string;
+  description?: string | null;
   status: string;
   package?: string;
   location?: string;
@@ -165,11 +180,25 @@ export default function CandidateListPage() {
 
   // Assessment state
   const [assessmentExists, setAssessmentExists] = useState<boolean | null>(null); // null = loading
+  const [existingQuestionCount, setExistingQuestionCount] = useState(0);
+  const [loadingAssessment, setLoadingAssessment] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [questions, setQuestions] = useState<MCQQuestion[]>([makeBlankQuestion()]);
   const [durationMins, setDurationMins] = useState(30);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+
+  // AI Assessment Generator state
+  const [aiFile, setAiFile] = useState<File | null>(null);
+  const [aiNumQuestions, setAiNumQuestions] = useState(10);
+  const [aiJobDesc, setAiJobDesc] = useState("");
+  const [generatingAi, setGeneratingAi] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null);
+  const [appendMode, setAppendMode] = useState<"replace" | "append">("replace");
+  const [showJdContext, setShowJdContext] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
     if (!driveId) return;
@@ -193,11 +222,15 @@ export default function CandidateListPage() {
   const checkAssessment = async () => {
     if (!driveId) return;
     try {
-      await api.getDriveAssessment(driveId);
+      const data = await api.getDriveAssessment(driveId);
       setAssessmentExists(true);
+      if (data && Array.isArray(data.questions)) {
+        setExistingQuestionCount(data.questions.length);
+      }
     } catch {
       // 404 means no assessment yet
       setAssessmentExists(false);
+      setExistingQuestionCount(0);
     }
   };
 
@@ -233,10 +266,120 @@ export default function CandidateListPage() {
   // ── Assessment question helpers ──────────────────────────────────────────────
 
   const openCreateModal = () => {
+    setIsEditMode(false);
     setQuestions([makeBlankQuestion()]);
     setDurationMins(30);
     setPublishError(null);
+    setAiFile(null);
+    setAiError(null);
+    setAiSuccessMessage(null);
+    setAiJobDesc(drive?.description || (drive?.title ? `Role: ${drive.title}` : ""));
     setCreateModalOpen(true);
+  };
+
+  const openEditModal = async () => {
+    try {
+      setLoadingAssessment(true);
+      const data = await api.getDriveAssessment(driveId);
+      if (data) {
+        setDurationMins(data.duration_mins || 30);
+        if (Array.isArray(data.questions) && data.questions.length > 0) {
+          setQuestions(
+            data.questions.map((q: RawQuestionInput) => ({
+              question: q.question || "",
+              options: [
+                q.options?.[0] || "",
+                q.options?.[1] || "",
+                q.options?.[2] || "",
+                q.options?.[3] || "",
+              ],
+              correct_option: typeof q.correct_option === "number" ? q.correct_option : 0,
+            }))
+          );
+        } else {
+          setQuestions([makeBlankQuestion()]);
+        }
+      }
+      setIsEditMode(true);
+      setPublishError(null);
+      setAiFile(null);
+      setAiError(null);
+      setAiSuccessMessage(null);
+      setAiJobDesc(drive?.description || (drive?.title ? `Role: ${drive.title}` : ""));
+      setCreateModalOpen(true);
+    } catch (err: unknown) {
+      console.error("[Edit Assessment Error]", err);
+      alert("Failed to load existing assessment.");
+    } finally {
+      setLoadingAssessment(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      if (!["pdf", "csv", "txt"].includes(ext || "")) {
+        setAiError("Please select a .csv, .pdf, or .txt file.");
+        return;
+      }
+      setAiFile(file);
+      setAiError(null);
+      setAiSuccessMessage(null);
+    }
+  };
+
+  const handleGenerateAiQuestions = async () => {
+    if (!aiFile) {
+      setAiError("Please select a CSV or PDF file to upload.");
+      return;
+    }
+
+    setGeneratingAi(true);
+    setAiError(null);
+    setAiSuccessMessage(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", aiFile);
+      formData.append("drive_id", driveId);
+      formData.append("num_questions", String(aiNumQuestions));
+      if (aiJobDesc.trim()) {
+        formData.append("custom_job_description", aiJobDesc.trim());
+      }
+
+      const res = await api.generateAssessmentQuestionsFromFile(formData);
+      if (res && Array.isArray(res.questions) && res.questions.length > 0) {
+        const mapped: MCQQuestion[] = res.questions.map((q: RawQuestionInput) => ({
+          question: q.question || "",
+          options: [
+            q.options?.[0] || "",
+            q.options?.[1] || "",
+            q.options?.[2] || "",
+            q.options?.[3] || "",
+          ],
+          correct_option: typeof q.correct_option === "number" ? q.correct_option : 0,
+        }));
+
+        if (appendMode === "append") {
+          setQuestions((prev) => {
+            const nonEmpty = prev.filter((p) => p.question.trim() || p.options.some((o) => o.trim()));
+            return [...nonEmpty, ...mapped];
+          });
+          setAiSuccessMessage(`Appended ${mapped.length} AI-generated questions from "${aiFile.name}".`);
+        } else {
+          setQuestions(mapped);
+          setAiSuccessMessage(`Successfully generated ${mapped.length} questions from "${aiFile.name}". Review and edit below before saving.`);
+        }
+      } else {
+        setAiError("AI could not extract questions from this file. Try another file or format.");
+      }
+    } catch (err: unknown) {
+      console.error("[AI Assessment Gen Error]", err);
+      setAiError(err instanceof Error ? err.message : "Failed to generate questions with AI.");
+    } finally {
+      setGeneratingAi(false);
+    }
   };
 
   const addQuestion = () => setQuestions((prev) => [...prev, makeBlankQuestion()]);
@@ -266,7 +409,11 @@ export default function CandidateListPage() {
   };
 
   const handlePublish = async () => {
-    // Validate
+    if (questions.length === 0) {
+      setPublishError("Please add at least one question.");
+      return;
+    }
+
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       if (!q.question.trim()) {
@@ -284,7 +431,8 @@ export default function CandidateListPage() {
     try {
       setPublishing(true);
       setPublishError(null);
-      await api.createAssessment({
+
+      const payload = {
         drive_id: driveId,
         questions: questions.map((q) => ({
           question: q.question.trim(),
@@ -292,12 +440,20 @@ export default function CandidateListPage() {
           correct_option: q.correct_option,
         })),
         duration_mins: durationMins,
-      });
+      };
+
+      if (isEditMode) {
+        await api.updateAssessment(driveId, payload);
+      } else {
+        await api.createAssessment(payload);
+      }
+
       setAssessmentExists(true);
+      setExistingQuestionCount(questions.length);
       setCreateModalOpen(false);
       dispatchNotificationsUpdated();
     } catch (err: unknown) {
-      setPublishError(err instanceof Error ? err.message : "Failed to create assessment.");
+      setPublishError(err instanceof Error ? err.message : "Failed to save assessment.");
     } finally {
       setPublishing(false);
     }
@@ -386,10 +542,21 @@ export default function CandidateListPage() {
           {assessmentExists === null ? (
             <div className="w-36 h-8 rounded-lg bg-muted animate-pulse" />
           ) : assessmentExists ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-              <CheckCircle2 className="size-3.5" />
-              Assessment Created ✓
-            </span>
+            <Button
+              id="edit-assessment-btn"
+              onClick={openEditModal}
+              size="sm"
+              variant="outline"
+              disabled={loadingAssessment}
+              className="gap-1.5 border-[#4F46E5]/40 text-[#4F46E5] hover:bg-[#EEF2FF] text-xs font-semibold shadow-sm"
+            >
+              {loadingAssessment ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <ClipboardCheck className="size-3.5" />
+              )}
+              Manage Assessment {existingQuestionCount > 0 ? `(${existingQuestionCount} Qs)` : "✓"}
+            </Button>
           ) : (
             <Button
               id="create-assessment-btn"
@@ -597,128 +764,367 @@ export default function CandidateListPage() {
         })}
       </Card>
 
-      {/* ── Create Assessment Modal ── */}
-      <Dialog open={createModalOpen} onOpenChange={(open) => !publishing && setCreateModalOpen(open)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 gap-5">
+      {/* ── Create / Manage Assessment Modal ── */}
+      <Dialog open={createModalOpen} onOpenChange={(open) => !publishing && !generatingAi && setCreateModalOpen(open)}>
+        <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-y-auto p-6 gap-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg">
-              <ClipboardCheck className="size-5 text-[#4F46E5]" />
-              Create Assessment
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Build an MCQ assessment for <strong className="text-foreground">{drive?.title}</strong>. Candidates will see questions without the correct answers highlighted.
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+                <ClipboardCheck className="size-5 text-[#4F46E5]" />
+                {isEditMode ? "Manage & Edit Assessment" : "Create Assessment"}
+              </DialogTitle>
+              {assessmentExists && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  Published Assessment
+                </span>
+              )}
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Configure assessment for <strong className="text-foreground">{drive?.title}</strong>. Upload a PDF or CSV to let AI generate aligned questions, or build manually.
             </DialogDescription>
           </DialogHeader>
 
-          {/* Duration */}
-          <div className="flex items-center gap-3">
-            <Label className="text-xs font-semibold shrink-0">Duration (minutes)</Label>
-            <Input
-              id="assessment-duration"
-              type="number"
-              min={5}
-              max={180}
-              value={durationMins}
-              onChange={(e) => setDurationMins(Math.max(5, parseInt(e.target.value) || 30))}
-              className="w-24 h-8 text-xs"
-            />
+          {/* ── AI Question Generator Section ── */}
+          <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/70 via-purple-50/40 to-white p-4 sm:p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="size-7 rounded-lg bg-[#4F46E5] flex items-center justify-center text-white shadow-sm">
+                  <Sparkles className="size-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                    AI Question Generator
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                      Auto-Extract
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    Upload a CSV or PDF file. AI will extract and formulate MCQs aligned with the Job Description.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowJdContext(!showJdContext)}
+                className="text-[11px] font-medium text-[#4F46E5] hover:underline flex items-center gap-1 shrink-0"
+              >
+                <HelpCircle className="size-3.5" />
+                {showJdContext ? "Hide JD context" : "Customize JD context"}
+              </button>
+            </div>
+
+            {/* Optional JD context edit */}
+            {showJdContext && (
+              <div className="space-y-1.5 p-3 rounded-lg bg-white/80 border border-indigo-100">
+                <Label className="text-[11px] font-semibold text-foreground">
+                  Job Description &amp; Custom Assessment Prompt
+                </Label>
+                <textarea
+                  value={aiJobDesc}
+                  onChange={(e) => setAiJobDesc(e.target.value)}
+                  placeholder="Role description, required skills, specific topics to emphasize (e.g. SQL joins, REST APIs, Python OOP)..."
+                  rows={3}
+                  className="w-full rounded-md border border-input bg-white px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 resize-none"
+                />
+              </div>
+            )}
+
+            {/* Upload Area & Configuration */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              {/* File Dropzone / Picker */}
+              <div className="sm:col-span-7">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.pdf,.txt"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                {!aiFile ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-white/60 hover:bg-white rounded-lg p-3 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-1.5"
+                  >
+                    <Upload className="size-5 text-[#4F46E5]" />
+                    <div className="text-xs font-medium text-foreground">
+                      Click to upload <span className="text-[#4F46E5] font-bold">CSV</span> or <span className="text-[#4F46E5] font-bold">PDF</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Question bank, syllabus, or exam notes (up to 10MB)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white border border-indigo-200">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      {aiFile.name.endsWith(".csv") ? (
+                        <FileSpreadsheet className="size-6 text-emerald-600 shrink-0" />
+                      ) : (
+                        <FileText className="size-6 text-rose-600 shrink-0" />
+                      )}
+                      <div className="truncate">
+                        <p className="text-xs font-semibold text-foreground truncate">{aiFile.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {(aiFile.size / 1024).toFixed(1)} KB • Ready for AI parsing
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAiFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      className="size-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                      title="Remove file"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Number of Questions & Mode */}
+              <div className="sm:col-span-5 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Number of Qs</Label>
+                  <div className="flex items-center gap-1">
+                    {[5, 10, 15, 20].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setAiNumQuestions(num)}
+                        className={cn(
+                          "px-1.5 py-0.5 text-[10px] rounded font-semibold transition-colors",
+                          aiNumQuestions === num
+                            ? "bg-[#4F46E5] text-white"
+                            : "bg-white text-muted-foreground hover:bg-muted border border-border"
+                        )}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={aiNumQuestions}
+                    onChange={(e) => setAiNumQuestions(Math.max(1, Math.min(50, parseInt(e.target.value) || 10)))}
+                    className="h-8 text-xs bg-white"
+                  />
+                  <select
+                    value={appendMode}
+                    onChange={(e) => setAppendMode(e.target.value as "replace" | "append")}
+                    className="h-8 px-2 rounded-md border border-input bg-white text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="replace">Replace all</option>
+                    <option value="append">Append</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Generator Action Button */}
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-[11px] text-muted-foreground">
+                AI extracts answers or calculates the most accurate option.
+              </p>
+              <Button
+                type="button"
+                onClick={handleGenerateAiQuestions}
+                disabled={generatingAi || !aiFile}
+                size="sm"
+                className="brand-gradient text-white text-xs font-bold gap-1.5 shadow-sm hover:opacity-90 disabled:opacity-50"
+              >
+                {generatingAi ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Analyzing document &amp; formulating…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-3.5" />
+                    Generate Questions with AI
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* AI Success / Error feedback */}
+            {aiSuccessMessage && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+                <Check className="size-4 text-emerald-600 shrink-0" />
+                <span>{aiSuccessMessage}</span>
+              </div>
+            )}
+            {aiError && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>{aiError}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Assessment Global Settings */}
+          <div className="flex flex-wrap items-center justify-between gap-4 py-1">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="assessment-duration" className="text-xs font-semibold shrink-0">
+                Duration (minutes)
+              </Label>
+              <Input
+                id="assessment-duration"
+                type="number"
+                min={5}
+                max={180}
+                value={durationMins}
+                onChange={(e) => setDurationMins(Math.max(5, parseInt(e.target.value) || 30))}
+                className="w-24 h-8 text-xs"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Total Questions: <strong className="text-foreground">{questions.length}</strong></span>
+              <span>•</span>
+              <span className="text-emerald-600 font-semibold">4 options per question</span>
+            </div>
           </div>
 
           <Separator />
 
-          {/* Questions */}
-          <div className="space-y-5">
-            {questions.map((q, qIdx) => (
-              <div
-                key={qIdx}
-                className="p-4 rounded-xl border border-border bg-muted/20 space-y-3 relative group"
-              >
-                {/* Question header */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#4F46E5]">Question {qIdx + 1}</span>
-                  {questions.length > 1 && (
-                    <button
-                      onClick={() => removeQuestion(qIdx)}
-                      disabled={publishing}
-                      className="size-6 rounded flex items-center justify-center text-muted-foreground hover:text-rose-500 hover:bg-rose-50 transition-colors"
-                      title="Remove question"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  )}
-                </div>
+          {/* ── Questions List / Editor ── */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-foreground">
+                Assessment Questions ({questions.length})
+              </h3>
+              <p className="text-[11px] text-muted-foreground">
+                Select the radio button next to the correct answer.
+              </p>
+            </div>
 
-                {/* Question text */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Question text *</Label>
-                  <textarea
-                    id={`question-${qIdx}-text`}
-                    value={q.question}
-                    onChange={(e) => updateQuestion(qIdx, "question", e.target.value)}
-                    placeholder="Enter your question here…"
-                    rows={2}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 resize-none"
-                  />
-                </div>
-
-                {/* Options */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {OPTION_LABELS.map((label, oIdx) => (
-                    <div key={oIdx} className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name={`q-${qIdx}-correct`}
-                        id={`q-${qIdx}-opt-${oIdx}`}
-                        checked={q.correct_option === oIdx}
-                        onChange={() => updateQuestion(qIdx, "correct_option", oIdx)}
-                        className="accent-[#4F46E5] shrink-0"
-                        title="Mark as correct"
-                      />
-                      <span className="text-xs font-bold text-muted-foreground w-4 shrink-0">{label}</span>
-                      <Input
-                        value={q.options[oIdx]}
-                        onChange={(e) => updateOption(qIdx, oIdx, e.target.value)}
-                        placeholder={`Option ${label}`}
-                        className="h-8 text-xs flex-1"
-                      />
+            <div className="space-y-4">
+              {questions.map((q, qIdx) => (
+                <div
+                  key={qIdx}
+                  className="p-4 rounded-xl border border-border bg-muted/20 space-y-3 relative group transition-all hover:border-indigo-200"
+                >
+                  {/* Question header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="size-6 rounded-full bg-[#4F46E5]/10 text-[#4F46E5] text-xs font-bold flex items-center justify-center">
+                        {qIdx + 1}
+                      </span>
+                      <span className="text-xs font-bold text-foreground">Question {qIdx + 1}</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Correct: Option {OPTION_LABELS[q.correct_option]}
+                      </span>
                     </div>
-                  ))}
+                    {questions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeQuestion(qIdx)}
+                        disabled={publishing || generatingAi}
+                        className="size-6 rounded flex items-center justify-center text-muted-foreground hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                        title="Remove question"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Question text */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Question text *</Label>
+                    <textarea
+                      id={`question-${qIdx}-text`}
+                      value={q.question}
+                      onChange={(e) => updateQuestion(qIdx, "question", e.target.value)}
+                      placeholder="Enter question statement here…"
+                      rows={2}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 resize-none"
+                    />
+                  </div>
+
+                  {/* Options */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {OPTION_LABELS.map((label, oIdx) => {
+                      const isCorrect = q.correct_option === oIdx;
+                      return (
+                        <div
+                          key={oIdx}
+                          className={cn(
+                            "flex items-center gap-2 p-1.5 rounded-lg border transition-colors",
+                            isCorrect
+                              ? "bg-emerald-50/60 border-emerald-300 ring-1 ring-emerald-300/50"
+                              : "bg-background border-border/80"
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name={`q-${qIdx}-correct`}
+                            id={`q-${qIdx}-opt-${oIdx}`}
+                            checked={isCorrect}
+                            onChange={() => updateQuestion(qIdx, "correct_option", oIdx)}
+                            className="accent-emerald-600 size-4 shrink-0 cursor-pointer ml-1"
+                            title="Mark as correct option"
+                          />
+                          <span
+                            className={cn(
+                              "text-xs font-bold w-4 shrink-0 text-center",
+                              isCorrect ? "text-emerald-700" : "text-muted-foreground"
+                            )}
+                          >
+                            {label}
+                          </span>
+                          <Input
+                            value={q.options[oIdx]}
+                            onChange={(e) => updateOption(qIdx, oIdx, e.target.value)}
+                            placeholder={`Option ${label}`}
+                            className="h-8 text-xs flex-1 bg-transparent border-0 focus-visible:ring-0 shadow-none px-1"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Select the radio button next to the correct option.
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {/* Add Question Button */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addQuestion}
+              disabled={publishing || generatingAi}
+              className="gap-1.5 text-xs border-dashed border-[#4F46E5]/40 text-[#4F46E5] hover:bg-[#EEF2FF] w-full py-2.5"
+            >
+              <Plus className="size-3.5" /> Add Question Manually
+            </Button>
           </div>
 
-          {/* Add Question */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={addQuestion}
-            disabled={publishing}
-            className="gap-1.5 text-xs border-dashed border-[#4F46E5]/40 text-[#4F46E5] hover:bg-[#EEF2FF]"
-          >
-            <Plus className="size-3.5" /> Add Question
-          </Button>
-
-          {/* Error */}
+          {/* Error display */}
           {publishError && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700">
               <AlertCircle className="size-4 shrink-0 mt-0.5" />
               <p className="text-xs">{publishError}</p>
-              <button onClick={() => setPublishError(null)} className="ml-auto shrink-0">
+              <button type="button" onClick={() => setPublishError(null)} className="ml-auto shrink-0">
                 <X className="size-3.5" />
               </button>
             </div>
           )}
 
-          <DialogFooter className="gap-2 sm:justify-end">
+          <DialogFooter className="gap-2 sm:justify-end pt-2">
             <Button
+              type="button"
               variant="outline"
               size="sm"
               onClick={() => setCreateModalOpen(false)}
-              disabled={publishing}
+              disabled={publishing || generatingAi}
               className="text-xs"
             >
               Cancel
@@ -726,14 +1132,22 @@ export default function CandidateListPage() {
             <Button
               id="publish-assessment-btn"
               onClick={handlePublish}
-              disabled={publishing}
+              disabled={publishing || generatingAi}
               size="sm"
               className="bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold gap-1.5"
             >
               {publishing ? (
-                <><Loader2 className="size-3.5 animate-spin" /> Publishing…</>
+                <>
+                  <Loader2 className="size-3.5 animate-spin" /> Saving…
+                </>
+              ) : isEditMode ? (
+                <>
+                  <ClipboardCheck className="size-3.5" /> Save Changes
+                </>
               ) : (
-                <><ClipboardCheck className="size-3.5" /> Publish Assessment</>
+                <>
+                  <ClipboardCheck className="size-3.5" /> Publish Assessment
+                </>
               )}
             </Button>
           </DialogFooter>

@@ -13,6 +13,7 @@ Usage:
 import uuid
 import enum
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import (
     Column, String, Text, Boolean, DateTime, ForeignKey,
@@ -220,6 +221,10 @@ class Assessment(Base):
 
     questions = Column(JSONB, default=list)  # [{question, options[], correct_option}]
     duration_mins = Column(Integer, default=30)
+    # Timeline: assessment is only accessible between assessment_start and assessment_end.
+    # assessment_start should be set >= drive.deadline (after registration closes).
+    assessment_start = Column(DateTime, nullable=True)  # When assessment window opens
+    assessment_end = Column(DateTime, nullable=True)    # When assessment window closes
 
     drive = relationship("Drive", back_populates="assessment")
 
@@ -244,12 +249,12 @@ class Interview(Base):
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
     application_id = Column(UUID(as_uuid=False), ForeignKey("applications.id"), unique=True, nullable=False)
 
-    questions = Column(JSONB, default=list)
-    transcript = Column(Text)              # from Whisper (Groq)
-    video_url = Column(String)             # optional, if recordings are stored
-    sentiment_data = Column(JSONB, default=dict)  # {confidence, tone, filler_word_count, ...}
-    scheduled_at = Column(DateTime)
-    completed_at = Column(DateTime)
+    questions: Any = Column(JSONB, default=list)
+    transcript: Any = Column(Text)              # from Whisper (Groq)
+    video_url: Any = Column(String)             # optional, if recordings are stored
+    sentiment_data: Any = Column(JSONB, default=dict)  # {confidence, tone, filler_word_count, ...}
+    scheduled_at: Any = Column(DateTime)
+    completed_at: Any = Column(DateTime)
 
     application = relationship("Application", back_populates="interview")
 

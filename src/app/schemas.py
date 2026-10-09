@@ -128,6 +128,7 @@ class DriveOut(BaseModel):
 
 class ApplicationCreate(BaseModel):
     drive_id: str
+    resume_url: Optional[str] = None  # Provided from frontend for validation; actual URL from student profile
 
 
 class ApplicationOut(BaseModel):
@@ -178,6 +179,21 @@ class AssessmentCreate(BaseModel):
     drive_id: str
     questions: List[AssessmentQuestion]
     duration_mins: int = 30
+    assessment_start: Optional[datetime] = None  # When assessment window opens (>= drive deadline)
+    assessment_end: Optional[datetime] = None    # When assessment window closes
+
+
+class AssessmentUpdate(BaseModel):
+    questions: List[AssessmentQuestion]
+    duration_mins: Optional[int] = 30
+    assessment_start: Optional[datetime] = None
+    assessment_end: Optional[datetime] = None
+
+
+class AssessmentGeneratedOut(BaseModel):
+    questions: List[AssessmentQuestion]
+    count: int
+    source_filename: Optional[str] = None
 
 
 class AssessmentOut(BaseModel):
@@ -187,6 +203,8 @@ class AssessmentOut(BaseModel):
     drive_id: str
     questions: List[Dict[str, Any]]
     duration_mins: int
+    assessment_start: Optional[datetime] = None
+    assessment_end: Optional[datetime] = None
 
 
 class AssessmentSubmissionCreate(BaseModel):
@@ -211,7 +229,7 @@ class AssessmentSubmissionOut(BaseModel):
 
 class InterviewCreate(BaseModel):
     application_id: str
-    questions: List[Any]
+    questions: Optional[List[Any]] = []
 
 
 class InterviewScheduleRequest(BaseModel):
@@ -229,12 +247,12 @@ class InterviewOut(BaseModel):
 
     id: str
     application_id: str
-    questions: List[Any]
-    transcript: Optional[str]
-    video_url: Optional[str]
-    sentiment_data: Dict[str, Any]
-    scheduled_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    questions: List[Any] = []
+    transcript: Optional[str] = None
+    video_url: Optional[str] = None
+    sentiment_data: Optional[Dict[str, Any]] = None
+    scheduled_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
 
 # ─────────────────────────────────────────────

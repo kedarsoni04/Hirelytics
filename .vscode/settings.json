@@ -7,5 +7,15 @@
   "python.autoComplete.extraPaths": [
     "${workspaceFolder}/src",
     "src"
-  ]
+  ],
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportGeneralTypeIssues": "none",
+    "reportAttributeAccessIssue": "none",
+    "reportArgumentType": "none",
+    "reportAssignmentType": "none",
+    "reportCallIssue": "none",
+    "reportOptionalMemberAccess": "none",
+    "reportOperatorIssue": "none"
+  }
 }

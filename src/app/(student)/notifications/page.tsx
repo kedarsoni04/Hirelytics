@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Bell,
   Trophy,
@@ -11,6 +12,7 @@ import {
   CheckCheck,
   X,
   Loader2,
+  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,7 +25,8 @@ import { formatDistanceToNow, isToday, parseISO } from "date-fns";
 const notifConfig: Record<string, { icon: React.ElementType; bg: string; color: string; label: string }> = {
   offer: { icon: Trophy, bg: "#FCE7F3", color: "#9D174D", label: "Offer" },
   shortlisted: { icon: Trophy, bg: "#FCE7F3", color: "#9D174D", label: "Shortlist" },
-  interview: { icon: Calendar, bg: "#DBEAFE", color: "#1E40AF", label: "Interview" },
+  interview: { icon: Video, bg: "#EDE9FE", color: "#6D28D9", label: "Interview" },
+  interview_scheduled: { icon: Video, bg: "#EDE9FE", color: "#6D28D9", label: "Interview" },
   ai_result_ready: { icon: Sparkles, bg: "#EDE9FE", color: "#5B21B6", label: "AI Result" },
   application_update: { icon: Send, bg: "#EEF2FF", color: "#3730A3", label: "Application" },
   system: { icon: Settings, bg: "#F1F5F9", color: "#475569", label: "System" },
@@ -190,6 +193,17 @@ export default function NotificationsPage() {
                           <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">
                             {notif.message}
                           </p>
+                          {/* Action button if interview */}
+                          {(notif.type === "interview" || notif.type === "interview_scheduled") && (
+                            <div className="mt-2.5">
+                              <Link href="/applications" onClick={(e) => e.stopPropagation()}>
+                                <Button size="sm" className="h-7 px-3 text-xs bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-sm gap-1.5 font-medium">
+                                  <Video className="size-3" /> Go to My Applications & Take Interview
+                                </Button>
+                              </Link>
+                            </div>
+                          )}
+
                           {/* Type badge */}
                           <span
                             className="inline-flex items-center gap-1 mt-2 px-1.5 py-0.5 rounded text-xs tracking-tight font-medium"
