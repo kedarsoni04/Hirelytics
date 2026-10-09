@@ -3,13 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  MoreHorizontal,
   Search,
-  Sparkles,
   FileText,
   Mail,
   CheckCircle2,
-  Clock,
   Loader2,
   AlertCircle,
   ChevronRight,
@@ -28,7 +25,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
 import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 
 type StageKey = "shortlisted" | "interviewed" | "offered" | "hired";

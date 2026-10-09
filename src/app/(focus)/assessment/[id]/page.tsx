@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -56,7 +56,6 @@ type FormattedOption = {
 };
 
 export default function AssessmentPage() {
-  const router = useRouter();
   const params = useParams();
   const rawId = params?.id as string;
 
@@ -211,7 +210,6 @@ export default function AssessmentPage() {
     } finally {
       setSubmitting(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applicationId, selectedAnswers, proctorFlags, assessment]);
 
   // Wire force-submit into the ref so useProctor can call it

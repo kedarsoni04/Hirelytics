@@ -3,17 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  TrendingUp,
-  Award,
   Sparkles,
   CheckCircle2,
   Clock,
-  BookOpen,
   Target,
   BarChart3,
   Zap,
   Loader2,
-  AlertCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

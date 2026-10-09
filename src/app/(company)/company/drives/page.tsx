@@ -7,7 +7,6 @@ import {
   Plus,
   MapPin,
   Calendar,
-  Users,
   ArrowRight,
   Sparkles,
   Search,

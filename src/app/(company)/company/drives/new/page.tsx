@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileText,
@@ -25,7 +25,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import CheckableCard from "@/components/ui/CheckableCard";
 import ChipInput from "@/components/ui/ChipInput";
 import { api } from "@/lib/api";
@@ -36,7 +35,7 @@ const BRANCH_SUGGESTIONS = [
   "Chemical", "Aerospace", "Biotechnology", "Mathematics",
 ];
 
-const LOCATION_SUGGESTIONS = ["Bangalore", "Hyderabad", "Pune", "Mumbai", "Delhi", "Chennai", "Remote"];
+
 
 const selectionStages = [
   {

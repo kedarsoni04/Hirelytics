@@ -20,7 +20,6 @@ import {
   Users,
   BarChart2,
   Calendar,
-  ShieldCheck,
   Building2,
   GraduationCap,
   Activity,

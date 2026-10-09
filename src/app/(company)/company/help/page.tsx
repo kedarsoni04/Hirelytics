@@ -1,20 +1,13 @@
 "use client";
 
-import type { Metadata } from "next";
-import Link from "next/link";
+
 import {
-  HelpCircle,
-  Mail,
-  Phone,
-  MessageSquare,
   FileQuestion,
-  Sparkles,
-  ExternalLink,
+  Mail,
   CheckCircle2,
-  ChevronRight,
   Send,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

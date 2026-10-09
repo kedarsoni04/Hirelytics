@@ -112,7 +112,7 @@ export default function InterviewSchedulerPage() {
               }
             }
           }
-        } catch (e) {
+        } catch {
           // ignore individual drive failures
         }
       }

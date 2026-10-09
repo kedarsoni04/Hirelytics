@@ -111,7 +111,7 @@ export default function ManageStudentsPage() {
     for (const s of flagged) {
       try {
         await api.updateStudentStatus(s.id, "active");
-      } catch (e) {}
+      } catch {}
     }
     setStudents(prev => prev.map(s => s.status === "Flagged" ? { ...s, status: "Active" } : s));
     showToast("Bulk verified all flagged student records.");

@@ -1,20 +1,15 @@
 "use client";
 
-import type { Metadata } from "next";
+
 import Link from "next/link";
 import {
   BookOpen,
-  Code2,
-  FileCode,
   Sparkles,
   Download,
-  ExternalLink,
   Search,
-  CheckCircle2,
-  Video,
   Bookmark,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";

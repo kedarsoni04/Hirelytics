@@ -10,7 +10,6 @@ import {
   Calendar,
   ArrowRight,
   Plus,
-  Clock,
   Loader2,
   AlertCircle,
 } from "lucide-react";

@@ -14,20 +14,15 @@ import {
   ArrowDown,
   Loader2,
   AlertCircle,
-  ArrowLeft,
   ClipboardCheck,
-  CheckCircle2,
   Plus,
   Trash2,
   X,
   Upload,
   FileSpreadsheet,
   FileText,
-  Wand2,
-  Edit3,
   Check,
   HelpCircle,
-  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

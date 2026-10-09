@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, X, CheckCircle2, AlertTriangle, XCircle, Clock } from "lucide-react";
+import { Sparkles, X, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 export default function BadgeShowcase() {
   return (

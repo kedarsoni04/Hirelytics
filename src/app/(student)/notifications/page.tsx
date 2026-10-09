@@ -5,12 +5,10 @@ import Link from "next/link";
 import {
   Bell,
   Trophy,
-  Calendar,
   Sparkles,
   Send,
   Settings,
   CheckCheck,
-  X,
   Loader2,
   Video,
 } from "lucide-react";

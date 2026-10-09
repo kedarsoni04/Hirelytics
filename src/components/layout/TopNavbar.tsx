@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, Sparkles, Bell, ChevronDown, User, Settings, LogOut } from "lucide-react";

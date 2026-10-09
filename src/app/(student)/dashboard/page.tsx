@@ -7,8 +7,6 @@ import {
   Star,
   Calendar,
   Trophy,
-  TrendingUp,
-  TrendingDown,
   Sparkles,
   MapPin,
   Clock,
@@ -62,33 +60,7 @@ const statIconMap: Record<string, React.ElementType> = {
   trophy: Trophy,
 };
 
-const activityIconMap: Record<string, React.ElementType> = {
-  sparkles: Sparkles,
-  star: Star,
-  check: CheckCircle2,
-  send: Send,
-  eye: Eye,
-};
 
-const activityColorMap: Record<string, string> = {
-  violet: "bg-[#EDE9FE] text-[#6D28D9]",
-  success: "bg-[#D1FAE5] text-[#065F46]",
-  indigo: "bg-[#EEF2FF] text-[#3730A3]",
-  muted: "bg-muted text-muted-foreground",
-};
-
-const statColors = [
-  { bg: "#EEF2FF", icon: "#4F46E5" },
-  { bg: "#D1FAE5", icon: "#059669" },
-  { bg: "#FEF3C7", icon: "#D97706" },
-  { bg: "#D1FAE5", icon: "#10B981" },
-];
-
-const statusStyles: Record<string, string> = {
-  live: "bg-[#D1FAE5] text-[#065F46]",
-  upcoming: "bg-[#FEF3C7] text-[#92400E]",
-  closed: "bg-muted text-muted-foreground",
-};
 
 type Activity = {
   id: string;

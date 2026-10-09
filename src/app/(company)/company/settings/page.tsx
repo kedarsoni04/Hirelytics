@@ -9,7 +9,6 @@ import {
   Plus,
   CheckCircle2,
   Mail,
-  MoreHorizontal,
   Sparkles,
   Loader2,
 } from "lucide-react";
