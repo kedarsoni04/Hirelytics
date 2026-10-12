@@ -56,6 +56,7 @@ type Application = {
   id: string;
   drive_id: string;
   drive?: { id: string };
+  current_stage?: string;
   has_interview?: boolean;
   interview_completed?: boolean;
   interview_scheduled_at?: string | null;
