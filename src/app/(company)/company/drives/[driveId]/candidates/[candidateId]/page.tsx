@@ -20,7 +20,15 @@ import {
   RefreshCw,
   Terminal,
   ShieldAlert,
+  ShieldCheck,
   Bot,
+  AlertTriangle,
+  Trophy,
+  UserCheck,
+  UserX,
+  HelpCircle,
+  Timer,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -88,6 +96,9 @@ type ApplicationDetails = {
   student_id: string;
   current_stage: string;
   applied_at: string;
+  offer_status?: string;
+  offer_letter_url?: string;
+  offer_responded_at?: string;
   student?: {
     id?: string;
     full_name?: string;
@@ -146,6 +157,47 @@ type SubmissionData = {
   [key: string]: unknown;
 };
 
+type InterviewDetails = {
+  id?: string;
+  application_id?: string;
+  questions?: (string | { question?: string; text?: string; category?: string })[];
+  transcript?: string;
+  proctor_flags?: { type?: string; timestamp?: string; details?: string }[];
+  sentiment_data?: Record<string, unknown>;
+  completed_at?: string | null;
+  scheduled_at?: string | null;
+  [key: string]: unknown;
+};
+
+function parseInterviewQA(questions: unknown[] | undefined, transcript: string | null | undefined) {
+  if (!transcript) return [];
+  const qaList: { index: number; question: string; answer: string; category?: string }[] = [];
+  const parts = transcript.split(/Question \d+:/);
+  for (let i = 1; i < parts.length; i++) {
+    const raw = parts[i];
+    const [qPart, aPart] = raw.split(/\nAnswer:/);
+    const qObj = questions && (questions[i - 1] as Record<string, unknown>);
+    const cat = typeof qObj === "object" ? String(qObj?.category || "") : undefined;
+    const qTitle = (typeof qObj === "object" ? String(qObj?.question || qObj?.text || "") : String(qObj || "")) || qPart.trim();
+    const ans = (aPart ? aPart.trim() : raw.trim()) || "No response recorded.";
+    qaList.push({
+      index: i,
+      question: qTitle,
+      answer: ans,
+      category: cat,
+    });
+  }
+  if (qaList.length === 0 && questions && questions.length > 0) {
+    return questions.map((q, idx) => ({
+      index: idx + 1,
+      question: typeof q === "string" ? q : String((q as Record<string, unknown>)?.question || (q as Record<string, unknown>)?.text || `Question ${idx + 1}`),
+      answer: transcript || "No recorded response.",
+      category: typeof q === "object" ? String((q as Record<string, unknown>)?.category || "") : undefined,
+    }));
+  }
+  return qaList;
+}
+
 export default function CandidateScorecardPage() {
   const params = useParams();
   const driveId = params?.driveId as string;
@@ -154,6 +206,7 @@ export default function CandidateScorecardPage() {
   const [application, setApplication] = useState<ApplicationDetails | null>(null);
   const [scorecard, setScorecard] = useState<ScorecardData | null>(null);
   const [submission, setSubmission] = useState<SubmissionData | null>(null); // assessment submission
+  const [interview, setInterview] = useState<InterviewDetails | null>(null);
   const [interviewExists, setInterviewExists] = useState<boolean | null>(null); // null = checking
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -189,11 +242,13 @@ export default function CandidateScorecardPage() {
         setSubmission(null);
       }
 
-      // Check if interview already exists
+      // Fetch interview data
       try {
-        await api.getApplicationInterview(candidateId);
+        const intData = await api.getApplicationInterview(candidateId);
+        setInterview(intData);
         setInterviewExists(true);
       } catch {
+        setInterview(null);
         setInterviewExists(false);
       }
     } catch (err: unknown) {
@@ -213,11 +268,39 @@ export default function CandidateScorecardPage() {
       setActionLoading(true);
       setActionMessage(null);
       await api.updateApplicationStage(candidateId, newStage);
-      setApplication((prev) => (prev ? { ...prev, current_stage: newStage } : null));
+      const updatedApp = await api.getApplication(candidateId);
+      setApplication(updatedApp);
       dispatchNotificationsUpdated();
+      if (newStage === "hired") {
+        setActionMessage("Candidate hired successfully! Official Offer Letter PDF was generated and sent to candidate's email.");
+        setActionMessageType("success");
+      } else if (newStage === "offered") {
+        setActionMessage("Offer extended to candidate. They can now accept or reject it in their portal.");
+        setActionMessageType("success");
+      }
     } catch (err: unknown) {
       console.error("[Candidate Action] Error:", err);
       setActionMessage(err instanceof Error ? err.message : "Failed to update candidate stage");
+      setActionMessageType("error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRemoveCandidate = async () => {
+    if (!confirm("Are you sure you want to remove this candidate from further recruitment process?")) return;
+    try {
+      setActionLoading(true);
+      setActionMessage(null);
+      await api.removeCandidateFromProcess(candidateId);
+      const updatedApp = await api.getApplication(candidateId);
+      setApplication(updatedApp);
+      dispatchNotificationsUpdated();
+      setActionMessage("Candidate removed from further recruitment process.");
+      setActionMessageType("success");
+    } catch (err: unknown) {
+      console.error("[Remove Candidate] Error:", err);
+      setActionMessage(err instanceof Error ? err.message : "Failed to remove candidate");
       setActionMessageType("error");
     } finally {
       setActionLoading(false);
@@ -411,17 +494,98 @@ export default function CandidateScorecardPage() {
             </div>
 
             {/* Action Bar */}
-            <div className="flex flex-col gap-2 shrink-0 md:w-56">
-              {stage === "shortlisted" ? (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
-                  <CheckCircle2 className="size-5 text-emerald-600 mx-auto mb-1" />
-                  <p className="text-xs font-bold text-emerald-800">Candidate Shortlisted</p>
+            <div className="flex flex-col gap-2 shrink-0 md:w-64">
+              {stage === "hired" ? (
+                <div className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 text-center space-y-2">
+                  <div className="flex items-center justify-center gap-1.5 text-teal-800 font-bold text-xs">
+                    <UserCheck className="size-4 text-teal-600" /> Candidate Hired
+                  </div>
+                  <p className="text-[11px] text-teal-700">Official hire confirmed & recorded.</p>
+                  {application.offer_letter_url && (
+                    <a
+                      href={application.offer_letter_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <Button size="sm" className="w-full h-7 text-xs bg-teal-600 hover:bg-teal-700 text-white gap-1.5 shadow-sm">
+                        <Download className="size-3" /> Download Offer Letter (PDF)
+                      </Button>
+                    </a>
+                  )}
+                </div>
+              ) : stage === "offered" ? (
+                <div className="p-3.5 rounded-xl border space-y-2 text-center bg-white shadow-sm">
+                  {application.offer_status === "accepted" ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center gap-1.5 text-emerald-700 font-bold text-xs bg-emerald-50 py-1.5 px-2 rounded-lg border border-emerald-200">
+                        <CheckCircle2 className="size-4 text-emerald-600" /> Candidate Accepted Offer!
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Click below to finalize hiring and issue the PDF offer letter.</p>
+                      <Button
+                        size="sm"
+                        onClick={() => handleStageAction("hired")}
+                        disabled={actionLoading}
+                        className="w-full brand-gradient text-white font-semibold text-xs h-8 shadow-sm gap-1.5"
+                      >
+                        {actionLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Trophy className="size-3.5" />}
+                        Hire & Issue Offer Letter
+                      </Button>
+                    </div>
+                  ) : application.offer_status === "rejected" ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center gap-1.5 text-rose-700 font-bold text-xs bg-rose-50 py-1.5 px-2 rounded-lg border border-rose-200">
+                        <XCircle className="size-4 text-rose-600" /> Candidate Rejected Offer
+                      </div>
+                      <p className="text-[11px] text-rose-600">Candidate chose to decline the job offer.</p>
+                      <Button
+                        size="sm"
+                        onClick={handleRemoveCandidate}
+                        disabled={actionLoading}
+                        variant="destructive"
+                        className="w-full text-xs h-8 gap-1.5 shadow-sm"
+                      >
+                        {actionLoading ? <Loader2 className="size-3.5 animate-spin" /> : <UserX className="size-3.5" />}
+                        Remove Candidate from Process
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center gap-1.5 text-amber-700 font-bold text-xs bg-amber-50 py-1.5 px-2 rounded-lg border border-amber-200">
+                        <Timer className="size-4 text-amber-600" /> Offer Extended (Pending)
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">Awaiting candidate acceptance in student portal.</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleStageAction("hired")}
+                        disabled={actionLoading}
+                        className="w-full text-xs h-7 text-emerald-700 border-emerald-300 hover:bg-emerald-50 gap-1.5"
+                      >
+                        Force Hire & Issue Letter
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : stage === "shortlisted" ? (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
+                  <div className="flex items-center justify-center gap-1 text-emerald-800 font-bold text-xs">
+                    <CheckCircle2 className="size-4 text-emerald-600" /> Candidate Shortlisted
+                  </div>
                   <Button
                     size="sm"
-                    variant="outline"
+                    onClick={() => handleStageAction("offered")}
+                    disabled={actionLoading}
+                    className="w-full bg-[#10B981] hover:bg-[#059669] text-white font-semibold text-xs h-8 shadow-sm gap-1.5"
+                  >
+                    <Trophy className="size-3.5" /> Extend Job Offer
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     onClick={() => handleStageAction("applied")}
                     disabled={actionLoading}
-                    className="w-full mt-2 h-7 text-xs tracking-tight"
+                    className="w-full h-6 text-[11px] text-muted-foreground hover:text-foreground"
                   >
                     Undo Shortlist
                   </Button>
@@ -429,7 +593,7 @@ export default function CandidateScorecardPage() {
               ) : stage === "rejected" ? (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-center">
                   <XCircle className="size-5 text-rose-600 mx-auto mb-1" />
-                  <p className="text-xs font-bold text-rose-800">Candidate Rejected</p>
+                  <p className="text-xs font-bold text-rose-800">Candidate Concluded / Rejected</p>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -437,7 +601,7 @@ export default function CandidateScorecardPage() {
                     disabled={actionLoading}
                     className="w-full mt-1 h-6 text-xs tracking-tight text-rose-700"
                   >
-                    Undo Decision
+                    Re-open Candidate
                   </Button>
                 </div>
               ) : (
@@ -451,10 +615,17 @@ export default function CandidateScorecardPage() {
                     Shortlist Candidate
                   </Button>
                   <Button
+                    onClick={() => handleStageAction("offered")}
+                    disabled={actionLoading}
+                    className="w-full gap-2 bg-[#10B981] hover:bg-[#059669] text-white font-semibold shadow-sm text-xs"
+                  >
+                    <Trophy className="size-3.5" /> Extend Job Offer
+                  </Button>
+                  <Button
                     onClick={() => handleStageAction("rejected")}
                     disabled={actionLoading}
                     variant="outline"
-                    className="w-full gap-2 text-[#F43F5E] hover:bg-[#FFE4E6] hover:text-[#E11D48] border-[#F43F5E]/30"
+                    className="w-full gap-2 text-[#F43F5E] hover:bg-[#FFE4E6] hover:text-[#E11D48] border-[#F43F5E]/30 text-xs"
                   >
                     <XCircle className="size-4" /> Reject Candidate
                   </Button>
@@ -579,6 +750,169 @@ export default function CandidateScorecardPage() {
                 </div>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Anti-Cheating & Proctoring Report (Requirement 3) ── */}
+      {(() => {
+        const assessFlags = (submission?.proctor_flags || []) as Record<string, unknown>[];
+        const interviewFlags = (interview?.proctor_flags || []) as Record<string, unknown>[];
+        const totalFlags = assessFlags.length + interviewFlags.length;
+        const hasTabSwitch = interviewFlags.some(
+          (f) => typeof f === "object" && f && (f.type === "tab_switch" || f.type === "window_blur")
+        );
+
+        if (totalFlags > 0) {
+          return (
+            <Card className="border-rose-300 bg-rose-50/70 card-shadow">
+              <CardContent className="p-6">
+                <div className="flex flex-wrap items-center gap-2 mb-3 text-rose-800">
+                  <ShieldAlert className="size-5 text-rose-600 shrink-0" />
+                  <h3 className="text-sm font-bold">Anti-Cheating Violations Detected ({totalFlags})</h3>
+                  {hasTabSwitch && (
+                    <span className="ml-auto px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-200 text-rose-800 border border-rose-300">
+                      Interview Terminated on Tab Switch
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-rose-700 mb-4 font-medium leading-relaxed">
+                  Candidate triggered anti-cheating alerts during the hiring evaluation. Detailed incident breakdown:
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {interviewFlags.length > 0 && (
+                    <div className="p-4 rounded-xl bg-white border border-rose-200 space-y-2.5">
+                      <p className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                        <Video className="size-3.5 text-rose-600" /> AI Video Interview ({interviewFlags.length} incidents)
+                      </p>
+                      <div className="space-y-2">
+                        {interviewFlags.map((flag, idx) => (
+                          <div key={idx} className="p-2.5 rounded-lg bg-rose-50/80 border border-rose-100 text-xs">
+                            <span className="font-bold text-rose-900 uppercase tracking-wider text-[10px] block">
+                              {String(flag.type || "Violation").replace(/_/g, " ")}
+                            </span>
+                            <span className="text-rose-800 text-[11px] block mt-0.5">
+                              {String(flag.details || "Anti-cheating violation recorded.")}
+                            </span>
+                            {!!flag.timestamp && (
+                              <span className="text-muted-foreground block text-[10px] mt-1">
+                                {formatDateTime(String(flag.timestamp))}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {assessFlags.length > 0 && (
+                    <div className="p-4 rounded-xl bg-white border border-rose-200 space-y-2.5">
+                      <p className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                        <ClipboardCheck className="size-3.5 text-rose-600" /> Assessment ({assessFlags.length} incidents)
+                      </p>
+                      <div className="space-y-2">
+                        {assessFlags.map((flag, idx) => {
+                          const label = typeof flag === "string" ? flag : String(flag?.details || flag?.type || "Flag");
+                          return (
+                            <div key={idx} className="p-2.5 rounded-lg bg-rose-50/80 border border-rose-100 text-xs">
+                              <span className="font-semibold text-rose-800 text-[11px] block">{label}</span>
+                              {!!flag?.timestamp && (
+                                <span className="text-muted-foreground block text-[10px] mt-1">
+                                  {formatDateTime(String(flag.timestamp))}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        }
+
+        if (submission || interview?.completed_at) {
+          return (
+            <Card className="border-emerald-200 bg-emerald-50/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <ShieldCheck className="size-5 text-emerald-600 shrink-0" />
+                <div>
+                  <p className="text-xs font-bold text-emerald-900">Anti-Cheating Proctoring: Clean Session</p>
+                  <p className="text-[11px] text-emerald-700">
+                    No tab switches, window blurs, or unauthorized shortcut keys were detected during the assessment or AI interview.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        }
+        return null;
+      })()}
+
+      {/* ── AI Interview Questions & Respective Candidate Answers (Requirement 3) ── */}
+      {interview && (interview.questions || interview.transcript) && (
+        <Card className="card-shadow border-border/60">
+          <CardContent className="p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2">
+                <Video className="size-4 text-[#7C3AED]" />
+                <h3 className="text-sm font-bold text-foreground">AI Interview Questions & Candidate Responses</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {interview.completed_at ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle2 className="size-3" /> Completed {formatDateTime(interview.completed_at)}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                    <Clock className="size-3" /> Scheduled / In Progress
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Questions & Respective Answers List */}
+            {(() => {
+              const qaList = parseInterviewQA(interview.questions, interview.transcript);
+              if (qaList.length === 0) {
+                return (
+                  <div className="p-6 text-center text-xs text-muted-foreground bg-muted/20 rounded-xl">
+                    Interview scheduled. Questions and candidate responses will appear here after the candidate completes their AI interview.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-4">
+                  {qaList.map((qa, idx) => (
+                    <div key={idx} className="p-4 rounded-xl border border-border/80 bg-slate-50/60 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-100 text-indigo-800">
+                          Question {qa.index}
+                        </span>
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-white px-2 py-0.5 rounded border">
+                          {qa.category ? qa.category.replace(/_/g, " ") : (idx % 2 === 0 ? "Technical / Coding" : "Descriptive")}
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-gray-900 leading-snug">
+                        {qa.question}
+                      </p>
+                      <div className="p-3 rounded-lg bg-white border border-gray-200/80 text-xs text-gray-700 space-y-1">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                          <MessageSquare className="size-3 text-indigo-500" /> Candidate Response:
+                        </p>
+                        <p className="leading-relaxed whitespace-pre-wrap font-sans">
+                          {qa.answer}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       )}

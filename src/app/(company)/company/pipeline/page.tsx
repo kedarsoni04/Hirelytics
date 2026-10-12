@@ -10,6 +10,8 @@ import {
   Loader2,
   AlertCircle,
   ChevronRight,
+  ShieldAlert,
+  UserMinus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,6 +133,21 @@ export default function PipelinePage() {
       await moveCandidate(selectedCandidate.id, "offered");
     }
     setOfferModalOpen(false);
+  };
+
+  const handleRemoveCandidate = async (appId: string) => {
+    if (!window.confirm("Are you sure you want to remove this candidate from the hiring process?")) return;
+    try {
+      setUpdatingId(appId);
+      await api.removeCandidateFromProcess(appId);
+      setApplications((prev) => prev.filter((a) => a.id !== appId));
+      dispatchNotificationsUpdated();
+    } catch (err: unknown) {
+      console.error("[Pipeline remove candidate failed]", err);
+      alert(err instanceof Error ? err.message : "Failed to remove candidate");
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   // Group applications by kanban columns
@@ -293,6 +310,29 @@ export default function PipelinePage() {
                             <span className="truncate">{student.college || student.branch || "Student"}</span>
                           </div>
 
+                          {/* Violations / Offer Status Badges */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {Boolean(app.has_proctor_violations || ((app.proctor_flags_count as number) || 0) > 0) && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200"
+                                title="Anti-cheating violation recorded"
+                              >
+                                <ShieldAlert className="size-3 text-rose-600" />
+                                Cheating Flagged ({Number(app.proctor_flags_count || 1)})
+                              </span>
+                            )}
+                            {app.offer_status === "rejected" && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                Offer Declined
+                              </span>
+                            )}
+                            {app.offer_status === "accepted" && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                ✓ Offer Accepted
+                              </span>
+                            )}
+                          </div>
+
                           {/* Actions based on column */}
                           <div className="flex gap-2 pt-2 border-t border-border/50">
                             {stage.id === "shortlisted" && (
@@ -317,23 +357,36 @@ export default function PipelinePage() {
                             )}
                             {stage.id === "offered" && (
                               <>
-                                <Button
-                                  size="sm"
-                                  disabled={isUpdating}
-                                  onClick={() => handleGenerateOffer(app)}
-                                  variant="outline"
-                                  className="flex-1 h-8 text-xs gap-1 text-[#4F46E5] border-[#4F46E5]/30 hover:bg-[#EEF2FF]"
-                                >
-                                  <FileText className="size-3" /> Offer
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  disabled={isUpdating}
-                                  onClick={() => moveCandidate(app.id, "hired")}
-                                  className="flex-1 h-8 text-xs bg-emerald-600 text-white hover:bg-emerald-700"
-                                >
-                                  {isUpdating ? <Loader2 className="size-3 animate-spin" /> : "Mark Hired"}
-                                </Button>
+                                {app.offer_status === "rejected" ? (
+                                  <Button
+                                    size="sm"
+                                    disabled={isUpdating}
+                                    onClick={() => handleRemoveCandidate(app.id)}
+                                    className="flex-1 h-8 text-xs bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 gap-1 font-semibold"
+                                  >
+                                    <UserMinus className="size-3" /> Remove from Process
+                                  </Button>
+                                ) : (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      disabled={isUpdating}
+                                      onClick={() => handleGenerateOffer(app)}
+                                      variant="outline"
+                                      className="flex-1 h-8 text-xs gap-1 text-[#4F46E5] border-[#4F46E5]/30 hover:bg-[#EEF2FF]"
+                                    >
+                                      <FileText className="size-3" /> Offer
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      disabled={isUpdating}
+                                      onClick={() => moveCandidate(app.id, "hired")}
+                                      className="flex-1 h-8 text-xs bg-emerald-600 text-white hover:bg-emerald-700"
+                                    >
+                                      {isUpdating ? <Loader2 className="size-3 animate-spin" /> : "Hire & Issue Letter"}
+                                    </Button>
+                                  </>
+                                )}
                               </>
                             )}
                             {stage.id === "hired" && (

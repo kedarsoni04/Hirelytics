@@ -181,6 +181,9 @@ class Application(Base):
     drive_id = Column(UUID(as_uuid=False), ForeignKey("drives.id"), nullable=False)
 
     current_stage = Column(SQLEnum(ApplicationStage), default=ApplicationStage.applied)
+    offer_status = Column(String, default="pending")  # "pending", "accepted", "rejected"
+    offer_letter_url = Column(Text, nullable=True)
+    offer_responded_at = Column(DateTime, nullable=True)
     applied_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -253,6 +256,7 @@ class Interview(Base):
     transcript: Any = Column(Text)              # from Whisper (Groq)
     video_url: Any = Column(String)             # optional, if recordings are stored
     sentiment_data: Any = Column(JSONB, default=dict)  # {confidence, tone, filler_word_count, ...}
+    proctor_flags: Any = Column(JSONB, default=list)  # [{type: 'tab_switch', timestamp, details}]
     scheduled_at: Any = Column(DateTime)
     completed_at: Any = Column(DateTime)
 

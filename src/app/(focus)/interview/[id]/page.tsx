@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -8,7 +8,9 @@ import {
   Square,
   RotateCcw,
   ShieldCheck,
+  ShieldAlert,
   Clock,
+  Timer,
   CheckCircle2,
   ChevronRight,
   Sparkles,
@@ -17,7 +19,8 @@ import {
   ArrowRight,
   Volume2,
   Keyboard,
-  Edit3
+  Edit3,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,7 +45,45 @@ type InterviewData = {
   [key: string]: unknown;
 };
 
+type ProctorFlag = {
+  type: string;
+  timestamp: string;
+  details?: string;
+};
+
 type AppState = "idle" | "recording" | "analyzing" | "done";
+
+function isTechnicalOrCoding(q: string | InterviewQuestion | undefined): boolean {
+  if (!q) return false;
+  if (typeof q === "object") {
+    const cat = (q.category || "").toLowerCase();
+    if (["technical", "coding", "problem_solving", "dsa", "system_design"].includes(cat)) {
+      return true;
+    }
+    const text = (q.question || q.text || "").toLowerCase();
+    if (/(code|coding|algorithm|data structure|complexity|function|implement|system design|sql|query|api|debug)/i.test(text)) {
+      return true;
+    }
+  } else if (typeof q === "string") {
+    if (/(code|coding|algorithm|data structure|complexity|function|implement|system design|sql|query|api|debug)/i.test(q)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getQuestionDuration(q: string | InterviewQuestion | undefined): number {
+  // Requirement 2:
+  // Descriptive questions: maximum 3 mins (180s)
+  // Technical / Coding questions: maximum 10 mins (600s)
+  return isTechnicalOrCoding(q) ? 600 : 180;
+}
+
+function formatMinutesSeconds(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 export default function InterviewPage() {
   const params = useParams();
@@ -59,8 +100,18 @@ export default function InterviewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  // Anti-cheating & Termination state (Requirement 1)
+  const [isTerminated, setIsTerminated] = useState(false);
+  const [terminationReason, setTerminationReason] = useState<string | null>(null);
+  const [proctorFlags, setProctorFlags] = useState<ProctorFlag[]>([]);
+  const flagsRef = useRef<ProctorFlag[]>([]);
+
+  // Question Timer state (Requirement 2)
+  const [timeLeft, setTimeLeft] = useState<number>(180);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const activeStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (!applicationId) return;
@@ -89,11 +140,12 @@ export default function InterviewPage() {
   const readAloud = (text: string) => {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    
+
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
-    // Try to find a good English voice
-    const voice = voices.find(v => v.lang.startsWith("en-") && (v.name.includes("Google") || v.name.includes("Natural"))) || voices.find(v => v.lang.startsWith("en-"));
+    const voice =
+      voices.find((v) => v.lang.startsWith("en-") && (v.name.includes("Google") || v.name.includes("Natural"))) ||
+      voices.find((v) => v.lang.startsWith("en-"));
     if (voice) {
       utterance.voice = voice;
     }
@@ -105,11 +157,277 @@ export default function InterviewPage() {
       const q = interview.questions[currentQuestionIndex];
       const text = typeof q === "string" ? q : q.question || q.text;
       if (text) {
-        // slight delay to ensure smooth transition
         setTimeout(() => readAloud(text), 500);
       }
     }
   }, [currentQuestionIndex, interview]);
+
+  // Reset timer on question change
+  useEffect(() => {
+    if (!interview?.questions) return;
+    const q = interview.questions[currentQuestionIndex];
+    const duration = getQuestionDuration(q);
+    setTimeLeft(duration);
+  }, [currentQuestionIndex, interview]);
+
+  // Force-submit on cheating termination
+  const handleTerminateInterview = useCallback(
+    async (flag: ProctorFlag) => {
+      if (isCompleted || isTerminated) return;
+
+      // Stop recorder and microphone if running
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {
+          // ignore
+        }
+      }
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+
+      flagsRef.current = [...flagsRef.current, flag];
+      setProctorFlags(flagsRef.current);
+      setIsTerminated(true);
+      setTerminationReason(flag.details || "Anti-cheating violation detected.");
+
+      // Automatically finalize and submit interview with current transcript & violation flags
+      if (interview) {
+        try {
+          setSubmitting(true);
+          const fullTranscript = interview.questions
+            .map((q: string | InterviewQuestion, i: number) => {
+              const qText = typeof q === "string" ? q : q.question || q.text || `Question ${i + 1}`;
+              const ans = recordedTranscripts[i] || "[Session terminated early due to anti-cheating violation]";
+              return `Question ${i + 1}: ${qText}\nAnswer: ${ans}`;
+            })
+            .join("\n\n");
+
+          await api.submitInterview(interview.id, {
+            transcript: fullTranscript,
+            proctor_flags: flagsRef.current,
+          });
+          dispatchNotificationsUpdated();
+        } catch (e) {
+          console.error("Auto submit on termination error:", e);
+        } finally {
+          setSubmitting(false);
+        }
+      }
+    },
+    [interview, isCompleted, isTerminated, recordedTranscripts]
+  );
+
+  // ── Anti-Cheating Event Handlers (Requirement 1: NO TAB SWITCHING ALLOWED) ──
+  useEffect(() => {
+    if (loading || isCompleted || isTerminated || !interview) return;
+
+    // 1. Tab visibility change (Tab switch / Browser minimize)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        const flag: ProctorFlag = {
+          type: "tab_switch",
+          timestamp: new Date().toISOString(),
+          details: "Candidate switched tab or minimized browser window during AI interview.",
+        };
+        handleTerminateInterview(flag);
+      }
+    };
+
+    // 2. Window blur (lost focus / Alt-Tab)
+    const handleBlur = () => {
+      if (document.visibilityState === "hidden") return; // Handled by visibilitychange
+      const flag: ProctorFlag = {
+        type: "window_blur",
+        timestamp: new Date().toISOString(),
+        details: "Browser window lost focus (e.g. Alt+Tab or switched to external application).",
+      };
+      handleTerminateInterview(flag);
+    };
+
+    // 3. DevTools keyboard shortcut blocking
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey;
+      const shift = e.shiftKey;
+      if (e.key === "F12" || (ctrl && shift && ["I", "i", "J", "j", "C", "c"].includes(e.key))) {
+        e.preventDefault();
+        const flag: ProctorFlag = {
+          type: "devtools_shortcut",
+          timestamp: new Date().toISOString(),
+          details: `Blocked keyboard shortcut: ${e.key} (Inspect / DevTools).`,
+        };
+        handleTerminateInterview(flag);
+      }
+    };
+
+    // 4. Right click context menu block
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      const flag: ProctorFlag = {
+        type: "right_click",
+        timestamp: new Date().toISOString(),
+        details: "Candidate attempted to open right-click context menu.",
+      };
+      flagsRef.current = [...flagsRef.current, flag];
+      setProctorFlags(flagsRef.current);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("contextmenu", handleContextMenu);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, [loading, isCompleted, isTerminated, interview, handleTerminateInterview]);
+
+  // ── Question Countdown Timer (Requirement 2) ──────────────────────────────
+  useEffect(() => {
+    if (loading || isCompleted || isTerminated || state === "analyzing") return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          // Timer reached 0: Auto advance
+          handleTimeExpired();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [loading, isCompleted, isTerminated, state, currentQuestionIndex]);
+
+  const handleTimeExpired = () => {
+    // If currently recording, stop
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+    }
+    // Auto advance
+    advanceToNextQuestion(true);
+  };
+
+  const advanceToNextQuestion = async (auto = false) => {
+    if (!interview?.questions) return;
+    const total = interview.questions.length;
+    if (currentQuestionIndex < total - 1) {
+      setCurrentQuestionIndex((prev) => prev + 1);
+      setState("idle");
+    } else {
+      // Last question reached: Submit interview
+      try {
+        setSubmitting(true);
+        const fullTranscript = interview.questions
+          .map((q: string | InterviewQuestion, i: number) => {
+            const qText = typeof q === "string" ? q : q.question || q.text || `Question ${i + 1}`;
+            const ans = recordedTranscripts[i] || (auto ? "[Auto-submitted on time limit]" : "No response recorded.");
+            return `Question ${i + 1}: ${qText}\nAnswer: ${ans}`;
+          })
+          .join("\n\n");
+
+        await api.submitInterview(interview.id, {
+          transcript: fullTranscript,
+          proctor_flags: flagsRef.current,
+        });
+        setIsCompleted(true);
+        dispatchNotificationsUpdated();
+      } catch (err: unknown) {
+        console.error("[Submit Interview] Error:", err);
+        alert(err instanceof Error ? err.message : "Failed to submit interview.");
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  };
+
+  const handleRecord = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      activeStreamRef.current = stream;
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        setState("analyzing");
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        stream.getTracks().forEach((track) => track.stop());
+
+        const formData = new FormData();
+        formData.append("file", audioBlob, "recording.webm");
+
+        try {
+          const res = await api.transcribeAudio(formData);
+          setRecordedTranscripts((prev) => ({
+            ...prev,
+            [currentQuestionIndex]: res.transcript || "No speech detected.",
+          }));
+        } catch (err: unknown) {
+          console.error("Transcription error:", err);
+          setRecordedTranscripts((prev) => ({
+            ...prev,
+            [currentQuestionIndex]:
+              err instanceof Error ? `[Error: ${err.message}]` : "[Error transcribing audio. Please try again.]",
+          }));
+        } finally {
+          setState("done");
+        }
+      };
+
+      mediaRecorder.start();
+      setState("recording");
+    } catch (err) {
+      console.error("Microphone access error:", err);
+      setState("done");
+      setRecordedTranscripts((prev) => ({
+        ...prev,
+        [currentQuestionIndex]: prev[currentQuestionIndex] || "",
+      }));
+    }
+  };
+
+  const handleStop = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const handleRetake = () => {
+    setState("idle");
+  };
+
+  const handleTypeInstead = () => {
+    setState("done");
+    if (!recordedTranscripts[currentQuestionIndex]) {
+      setRecordedTranscripts((prev) => ({
+        ...prev,
+        [currentQuestionIndex]: "",
+      }));
+    }
+  };
+
+  const handleNext = () => {
+    advanceToNextQuestion(false);
+  };
 
   if (loading) {
     return (
@@ -141,6 +459,45 @@ export default function InterviewPage() {
     );
   }
 
+  // Anti-Cheating Termination Screen (Requirement 1)
+  if (isTerminated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6 bg-[#FFF1F2]">
+        <Card className="max-w-lg w-full border-rose-300 bg-white card-shadow text-center p-8 space-y-6">
+          <div className="size-20 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto ring-8 ring-rose-50">
+            <ShieldAlert className="size-10 text-rose-600" />
+          </div>
+
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-100 text-rose-700">
+              <AlertTriangle className="size-3.5" /> Anti-Cheating Violation
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">Interview Terminated</h1>
+            <p className="text-sm text-rose-700 font-medium leading-relaxed">
+              {terminationReason || "Tab switching or window minimization is strictly prohibited during the interview."}
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-left text-xs text-slate-700 space-y-2">
+            <p className="font-semibold text-slate-900">Violation Details Recorded:</p>
+            <ul className="list-disc list-inside space-y-1 text-slate-600">
+              <li>Tab switched or browser window minimized.</li>
+              <li>Incident count: {proctorFlags.length || 1} violation(s) recorded</li>
+              <li>Timestamp logged: {new Date().toLocaleTimeString()}</li>
+              <li>Proctoring flags and partial session forwarded to the recruiter.</li>
+            </ul>
+          </div>
+
+          <Link href="/applications" className="block">
+            <Button className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold">
+              Return to Applications <ArrowRight className="size-4 ml-2" />
+            </Button>
+          </Link>
+        </Card>
+      </div>
+    );
+  }
+
   if (isCompleted) {
     return (
       <div className="flex items-center justify-center min-h-screen p-6 bg-[#F8FAFC]">
@@ -148,6 +505,7 @@ export default function InterviewPage() {
           <div className="size-16 rounded-full bg-[#D1FAE5] text-[#065F46] flex items-center justify-center mx-auto">
             <CheckCircle2 className="size-8 text-emerald-600" />
           </div>
+
           <div>
             <h1 className="text-2xl font-bold text-foreground">Interview Completed!</h1>
             <p className="text-xs text-muted-foreground mt-1">
@@ -178,118 +536,45 @@ export default function InterviewPage() {
   const questions = interview.questions;
   const total = questions.length;
   const currentQ = questions[currentQuestionIndex];
+  const isTechnical = isTechnicalOrCoding(currentQ);
+  const maxQuestionTime = getQuestionDuration(currentQ);
 
-  const handleRecord = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        setState("analyzing");
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        stream.getTracks().forEach((track) => track.stop());
-
-        const formData = new FormData();
-        formData.append("file", audioBlob, "recording.webm");
-
-        try {
-          const res = await api.transcribeAudio(formData);
-          setRecordedTranscripts((prev) => ({
-            ...prev,
-            [currentQuestionIndex]: res.transcript || "No speech detected.",
-          }));
-        } catch (err: unknown) {
-          console.error("Transcription error:", err);
-          setRecordedTranscripts((prev) => ({
-            ...prev,
-            [currentQuestionIndex]: err instanceof Error ? `[Error: ${err.message}]` : "[Error transcribing audio. Please try again.]",
-          }));
-        } finally {
-          setState("done");
-        }
-      };
-
-      mediaRecorder.start();
-      setState("recording");
-    } catch (err) {
-      console.error("Microphone access error:", err);
-      // Fallback gracefully so candidate is never blocked
-      setState("done");
-      setRecordedTranscripts((prev) => ({
-        ...prev,
-        [currentQuestionIndex]: prev[currentQuestionIndex] || "",
-      }));
-    }
-  };
-
-  const handleStop = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-  };
-
-  const handleRetake = () => {
-    setState("idle");
-  };
-
-  const handleTypeInstead = () => {
-    setState("done");
-    if (!recordedTranscripts[currentQuestionIndex]) {
-      setRecordedTranscripts((prev) => ({
-        ...prev,
-        [currentQuestionIndex]: "",
-      }));
-    }
-  };
-
-  const handleNext = async () => {
-    if (currentQuestionIndex < total - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setState("idle");
-    } else {
-      // Final submission
-      try {
-        setSubmitting(true);
-        const fullTranscript = questions
-          .map((q: string | InterviewQuestion, i: number) => {
-            const qText = typeof q === "string" ? q : q.question || q.text || `Question ${i + 1}`;
-            const ans = recordedTranscripts[i] || "No response recorded.";
-            return `Question ${i + 1}: ${qText}\nAnswer: ${ans}`;
-          })
-          .join("\n\n");
-
-        await api.submitInterview(interview.id, {
-          transcript: fullTranscript,
-        });
-        setIsCompleted(true);
-        dispatchNotificationsUpdated();
-      } catch (err: unknown) {
-        console.error("[Submit Interview] Error:", err);
-        alert(err instanceof Error ? err.message : "Failed to submit interview.");
-      } finally {
-        setSubmitting(false);
-      }
-    }
-  };
+  const timerIsWarning = timeLeft <= 60 && timeLeft > 20;
+  const timerIsUrgent = timeLeft <= 20;
 
   return (
     <div className="flex flex-col h-full bg-[#F8FAFC]">
+      {/* Top Warning Alert Banner for Proctoring */}
+      <div className="bg-rose-50 border-b border-rose-200 px-4 py-1.5 flex items-center justify-center gap-2 text-[11px] font-semibold text-rose-700">
+        <ShieldAlert className="size-3.5 text-rose-600 animate-pulse" />
+        Strict Proctoring Active: Tab switching or minimizing this browser window will immediately terminate your interview!
+      </div>
+
       {/* Top bar */}
       <div className="h-14 border-b border-border bg-white px-8 flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-sm font-bold text-foreground">AI Video Interview Assessment</h1>
         </div>
-        <div className="flex items-center gap-6">
-          <span className="inline-flex items-center gap-1.5 text-xs tracking-tight font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
-            <ShieldCheck className="size-3.5" /> Proctoring Active
+        <div className="flex items-center gap-4 md:gap-6">
+          {/* Question countdown timer badge */}
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono transition-colors ${
+              timerIsUrgent
+                ? "bg-rose-100 text-rose-700 border border-rose-300 animate-pulse"
+                : timerIsWarning
+                ? "bg-amber-100 text-amber-800 border border-amber-300"
+                : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+            }`}
+          >
+            <Timer className="size-3.5" />
+            <span>Time Left: {formatMinutesSeconds(timeLeft)}</span>
+            <span className="text-[10px] font-normal opacity-75">
+              ({Math.floor(maxQuestionTime / 60)}m max)
+            </span>
+          </div>
+
+          <span className="hidden sm:inline-flex items-center gap-1.5 text-xs tracking-tight font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
+            <ShieldCheck className="size-3.5" /> Proctor Active
           </span>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-sm font-semibold font-mono">
             <Clock className="size-3.5 text-muted-foreground" /> Question {currentQuestionIndex + 1} of {total}
@@ -324,7 +609,9 @@ export default function InterviewPage() {
                     <Keyboard className="size-3.5" /> Type answer manually instead
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">Speak clearly into your microphone, or choose to type your response.</p>
+                <p className="text-xs text-muted-foreground text-center">
+                  Speak clearly into your microphone, or choose to type your response.
+                </p>
               </>
             )}
 
@@ -367,7 +654,7 @@ export default function InterviewPage() {
                   <CheckCircle2 className="size-4" />
                   <span className="font-semibold text-xs uppercase tracking-wide">Candidate Response</span>
                 </div>
-                
+
                 {/* Editable Transcript preview */}
                 <div className="w-full text-left bg-gray-50/80 p-3 rounded-xl border border-gray-200/80 space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -426,7 +713,7 @@ export default function InterviewPage() {
 
         {/* Right: Question context */}
         <div className="flex flex-col gap-6 max-w-2xl w-full">
-          {/* Progress */}
+          {/* Progress & Question Time */}
           <div className="space-y-2">
             <div className="flex justify-between items-center text-xs font-semibold">
               <span className="text-foreground">
@@ -454,12 +741,12 @@ export default function InterviewPage() {
 
           <Card className="card-shadow border-border/60 bg-white">
             <CardContent className="p-6 md:p-8 space-y-6">
-              <div className="flex justify-between items-start gap-4">
+              <div className="flex flex-wrap justify-between items-start gap-4">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs tracking-tight font-bold bg-[#EEF2FF] text-[#3730A3] uppercase tracking-wider">
-                  {typeof currentQ === "string" ? "Interview Question" : (currentQ.category || "General").replace(/_/g, " ")}
+                  {isTechnical ? "Technical / Coding Question" : "Descriptive / Behavioral Question"}
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs tracking-tight font-medium bg-muted text-muted-foreground">
-                  <Clock className="size-3" /> 2 min recommended
+                  <Clock className="size-3" /> Max {isTechnical ? "10 mins" : "3 mins"}
                 </span>
               </div>
 
@@ -467,9 +754,9 @@ export default function InterviewPage() {
                 {typeof currentQ === "string" ? currentQ : currentQ.question || currentQ.text || "Interview Question"}
               </h2>
 
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="gap-2 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50 mt-2"
                 onClick={() => {
                   const text = typeof currentQ === "string" ? currentQ : currentQ.question || currentQ.text;
@@ -483,10 +770,12 @@ export default function InterviewPage() {
               <div className="mt-8 p-4 rounded-xl bg-[#EDE9FE] border border-violet-200/50">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Sparkles className="size-4 text-violet-600" />
-                  <span className="text-xs font-bold text-[#5B21B6]">AI Tip</span>
+                  <span className="text-xs font-bold text-[#5B21B6]">AI Guidance</span>
                 </div>
                 <p className="text-sm text-[#4C1D95] leading-relaxed">
-                  Structure your answer using the STAR method: Situation, Task, Action, Result. Emphasize specific technical tools and outcomes.
+                  {isTechnical
+                    ? "Explain your algorithm, time/space complexity, edge cases, and architectural trade-offs systematically."
+                    : "Structure your answer using the STAR method: Situation, Task, Action, and Result with quantifiable outcomes."}
                 </p>
               </div>
             </CardContent>

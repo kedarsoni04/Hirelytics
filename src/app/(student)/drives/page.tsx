@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Loader2,
   AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,13 +82,29 @@ export default function BrowseDrivesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [acceptedOffer, setAcceptedOffer] = useState<{ id: string; title?: string } | null>(null);
 
   const fetchDrives = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await api.getDrives();
+      const [data, myApps] = await Promise.all([
+        api.getDrives(),
+        api.getMyApplications().catch(() => []),
+      ]);
       setDrives(data);
+      if (Array.isArray(myApps)) {
+        const placed = myApps.find(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (a: any) => a.offer_status === "accepted" || a.current_stage === "hired"
+        );
+        if (placed) {
+          setAcceptedOffer({
+            id: placed.id,
+            title: placed.drive?.title || placed.drive_title || "Campus Drive",
+          });
+        }
+      }
     } catch (err: unknown) {
       console.error("[Browse Drives] API error:", err);
       setError(err instanceof Error ? err.message : "Failed to load drives");
@@ -112,6 +129,30 @@ export default function BrowseDrivesPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
+
+      {/* ── Placed / Offer Accepted Banner ── */}
+      {acceptedOffer && (
+        <Card className="border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50">
+          <CardContent className="flex items-center gap-3.5 p-4">
+            <div className="size-9 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+              <CheckCircle2 className="size-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-emerald-950">
+                Placement Offer Accepted — You Are Placed! 🎉
+              </p>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                You have accepted an offer with <strong>{acceptedOffer.title}</strong>. Under campus placement policies, placed candidates are not eligible to apply to additional drives.
+              </p>
+            </div>
+            <Link href="/applications">
+              <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs shrink-0 font-medium">
+                View Offer
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

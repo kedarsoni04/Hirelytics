@@ -19,13 +19,30 @@ import {
   Calendar,
   CheckCircle2,
   Video,
+  Download,
+  UserCheck,
+  Check,
+  X,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 
-type AppStage = "applied" | "ai_screened" | "assessment" | "ai_interview" | "shortlisted" | "offer" | "rejected" | "withdrawn";
+type AppStage =
+  | "applied"
+  | "resume_screened"
+  | "ai_screened"
+  | "assessment"
+  | "ai_interview"
+  | "shortlisted"
+  | "hr_round"
+  | "offer"
+  | "offered"
+  | "hired"
+  | "rejected"
+  | "withdrawn";
 
 interface ApplicationDrive {
   id?: string;
@@ -43,6 +60,9 @@ interface Application {
   current_stage: AppStage;
   applied_at: string;
   updated_at?: string | null;
+  offer_status?: string | null;
+  offer_letter_url?: string | null;
+  offer_responded_at?: string | null;
   drive?: ApplicationDrive | null;
   overall_ai_score?: number | null;
   has_assessment?: boolean;
@@ -62,7 +82,7 @@ interface Application {
 // ── Stage config ───────────────────────────────────────────────────────────────
 
 const stageConfig: Record<
-  AppStage,
+  string,
   {
     label: string;
     bg: string;
@@ -77,6 +97,13 @@ const stageConfig: Record<
     text: "#3730A3",
     icon: Send,
     dot: "#6366F1",
+  },
+  resume_screened: {
+    label: "Resume Screened",
+    bg: "#EDE9FE",
+    text: "#5B21B6",
+    icon: Sparkles,
+    dot: "#8B5CF6",
   },
   ai_screened: {
     label: "AI Screened",
@@ -106,12 +133,33 @@ const stageConfig: Record<
     icon: Star,
     dot: "#10B981",
   },
+  hr_round: {
+    label: "HR Round",
+    bg: "#E0E7FF",
+    text: "#3730A3",
+    icon: Calendar,
+    dot: "#6366F1",
+  },
   offer: {
-    label: "Offer 🎉",
+    label: "Offer Extended 🎉",
     bg: "#D1FAE5",
     text: "#065F46",
     icon: Trophy,
     dot: "#10B981",
+  },
+  offered: {
+    label: "Offer Extended 🎉",
+    bg: "#D1FAE5",
+    text: "#065F46",
+    icon: Trophy,
+    dot: "#10B981",
+  },
+  hired: {
+    label: "Hired 🎉",
+    bg: "#CCFBF1",
+    text: "#115E59",
+    icon: UserCheck,
+    dot: "#0D9488",
   },
   rejected: {
     label: "Rejected",
@@ -131,14 +179,18 @@ const stageConfig: Record<
 
 // ── Stage summary counts ──────────────────────────────────────────────────────
 
-const summaryStages: AppStage[] = ["applied", "ai_screened", "assessment", "ai_interview", "shortlisted", "offer", "rejected"];
+const summaryStages = ["applied", "assessment", "ai_interview", "shortlisted", "offered", "hired", "rejected"];
 
 function getStageCounts(applications: Application[]) {
   return summaryStages.map((stage) => ({
     stage,
-    count: applications.filter((a) => a.current_stage === stage).length,
+    count: applications.filter((a) => {
+      if (stage === "offered") return a.current_stage === "offered" || a.current_stage === "offer";
+      return a.current_stage === stage;
+    }).length,
   }));
 }
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -192,6 +244,24 @@ export default function ApplicationsPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [respondingAppId, setRespondingAppId] = useState<string | null>(null);
+
+  const handleOfferResponse = async (appId: string, response: "accepted" | "rejected") => {
+    const actionText = response === "accepted" ? "ACCEPT" : "DECLINE";
+    if (!confirm(`Are you sure you want to ${actionText} this job offer?`)) return;
+    try {
+      setRespondingAppId(appId);
+      await api.respondToOffer(appId, response);
+      const data = await api.getMyApplications();
+      setApplications(data);
+      dispatchNotificationsUpdated();
+    } catch (err: unknown) {
+      console.error("Offer response error:", err);
+      alert(err instanceof Error ? err.message : "Failed to record offer response.");
+    } finally {
+      setRespondingAppId(null);
+    }
+  };
 
   useEffect(() => {
     const loadApps = async () => {
@@ -230,15 +300,15 @@ export default function ApplicationsPage() {
   const hasInsight = appsWithScore.length > 0;
   const bestApp = hasInsight
     ? appsWithScore.reduce((best, a) =>
-        (a.overall_ai_score ?? 0) > (best.overall_ai_score ?? 0) ? a : best
-      )
+      (a.overall_ai_score ?? 0) > (best.overall_ai_score ?? 0) ? a : best
+    )
     : null;
   const bestScore = bestApp?.overall_ai_score ?? 0;
   const avgScore = hasInsight
     ? Math.round(
-        appsWithScore.reduce((sum, a) => sum + (a.overall_ai_score ?? 0), 0) /
-          appsWithScore.length
-      )
+      appsWithScore.reduce((sum, a) => sum + (a.overall_ai_score ?? 0), 0) /
+      appsWithScore.length
+    )
     : 0;
 
   return (
@@ -476,6 +546,56 @@ export default function ApplicationsPage() {
                     )
                   )}
 
+                  {/* Offer Extended or Hired Actions (Requirement 4 & 5) */}
+                  {(app.current_stage === "offered" || app.current_stage === "offer") && (
+                    <div className="flex items-center gap-1.5">
+                      {app.offer_status === "accepted" ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 whitespace-nowrap">
+                          <CheckCircle2 className="size-3" /> Offer Accepted ✓
+                        </span>
+                      ) : app.offer_status === "rejected" ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 border border-rose-200 text-rose-700 whitespace-nowrap">
+                          <XCircle className="size-3" /> Offer Declined
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            disabled={respondingAppId === app.id}
+                            onClick={() => handleOfferResponse(app.id, "accepted")}
+                            className="h-7 px-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm gap-1"
+                          >
+                            <Check className="size-3" /> Accept Offer
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={respondingAppId === app.id}
+                            onClick={() => handleOfferResponse(app.id, "rejected")}
+                            className="h-7 px-2.5 text-xs font-bold text-rose-600 border-rose-300 hover:bg-rose-50 gap-1"
+                          >
+                            <X className="size-3" /> Decline
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {app.current_stage === "hired" && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 border border-teal-200 text-teal-800 whitespace-nowrap">
+                        <UserCheck className="size-3" /> Hired ✓
+                      </span>
+                      {app.offer_letter_url && (
+                        <a href={app.offer_letter_url} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" className="h-7 px-2.5 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white gap-1 shadow-sm">
+                            <Download className="size-3" /> Offer Letter
+                          </Button>
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                   {isActive ? (
                     <Link href={`/drives/${app.drive_id}`}>
                       <Button variant="ghost" size="sm" className="text-xs gap-1 h-7 group-hover:bg-accent">
@@ -505,6 +625,48 @@ export default function ApplicationsPage() {
                       </Link>
                     )}
                   </div>
+
+                  {/* Mobile Offer Actions */}
+                  {(app.current_stage === "offered" || app.current_stage === "offer") && (
+                    <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 flex flex-col gap-2">
+                      <p className="text-xs font-bold text-emerald-900 flex items-center gap-1">
+                        <Trophy className="size-3.5 text-emerald-600" /> Job Offer Extended!
+                      </p>
+                      {app.offer_status === "accepted" ? (
+                        <span className="text-xs font-semibold text-emerald-700">You accepted this offer ✓</span>
+                      ) : app.offer_status === "rejected" ? (
+                        <span className="text-xs font-semibold text-rose-700">You declined this offer ❌</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            disabled={respondingAppId === app.id}
+                            onClick={() => handleOfferResponse(app.id, "accepted")}
+                            className="flex-1 h-7 text-xs font-bold bg-emerald-600 text-white"
+                          >
+                            Accept Offer
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={respondingAppId === app.id}
+                            onClick={() => handleOfferResponse(app.id, "rejected")}
+                            className="flex-1 h-7 text-xs font-bold text-rose-600 border-rose-300"
+                          >
+                            Decline
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {app.current_stage === "hired" && app.offer_letter_url && (
+                    <a href={app.offer_letter_url} target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" className="w-full h-8 text-xs font-bold bg-teal-600 text-white gap-1.5">
+                        <Download className="size-3.5" /> Download Official Offer Letter
+                      </Button>
+                    </a>
+                  )}
                   {(() => {
                     const candidateShortlisted = isCandidateShortlisted(app.current_stage) || app.is_shortlisted;
                     if (!app.has_assessment && !candidateShortlisted) return null;

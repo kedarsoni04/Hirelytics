@@ -45,3 +45,37 @@ def delete_resume(public_id: str) -> bool:
     except Exception as e:
         print(f"Cloudinary delete error: {e}")
         return False
+
+
+def upload_offer_letter(file_bytes: bytes, application_id: str) -> str:
+    """
+    Uploads a generated Offer Letter PDF to Cloudinary under hirelytics/offers/{application_id}.pdf
+    Falls back to writing to public/offer_letters/ if Cloudinary is unavailable.
+    Returns the URL/path to the offer letter.
+    """
+    try:
+        if os.getenv("CLOUDINARY_CLOUD_NAME") and os.getenv("CLOUDINARY_API_KEY"):
+            public_id = f"hirelytics/offers/{application_id}"
+            result = cloudinary.uploader.upload(
+                file_bytes,
+                public_id=public_id,
+                resource_type="raw",
+                overwrite=True,
+                invalidate=True,
+            )
+            return result["secure_url"]
+    except Exception as e:
+        print(f"[Storage] Cloudinary offer letter upload failed: {e}. Storing locally.")
+
+    # Local fallback
+    try:
+        local_dir = os.path.join(os.getcwd(), "public", "offer_letters")
+        os.makedirs(local_dir, exist_ok=True)
+        local_path = os.path.join(local_dir, f"{application_id}.pdf")
+        with open(local_path, "wb") as f:
+            f.write(file_bytes)
+        return f"/offer_letters/{application_id}.pdf"
+    except Exception as e:
+        print(f"[Storage] Local offer letter store failed: {e}")
+        return ""
+

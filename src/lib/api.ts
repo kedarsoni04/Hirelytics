@@ -100,6 +100,10 @@ export const api = {
   getDriveApplications: (driveId: string) => fetchAPI(`/applications/drive/${driveId}`, { method: 'GET' }),
   updateApplicationStage: (id: string, stage: string) => fetchAPI(`/applications/${id}/stage`, { method: 'PATCH', body: JSON.stringify({ current_stage: stage }) }),
   getApplication: (id: string) => fetchAPI(`/applications/${id}`, { method: 'GET' }),
+  respondToOffer: (applicationId: string, response: 'accepted' | 'rejected') =>
+    fetchAPI(`/applications/${applicationId}/offer-response`, { method: 'POST', body: JSON.stringify({ response }) }),
+  removeCandidateFromProcess: (applicationId: string) =>
+    fetchAPI(`/applications/${applicationId}/remove`, { method: 'POST' }),
 
   // Assessments
   getDriveAssessment: (driveId: string) => fetchAPI(`/assessments/drive/${driveId}`, { method: 'GET' }),
@@ -117,7 +121,8 @@ export const api = {
   getApplicationInterview: (applicationId: string) => fetchAPI(`/interviews/application/${applicationId}`, { method: 'GET' }),
   createInterview: (data: { application_id: string; questions: Record<string, unknown>[] }) =>
     fetchAPI('/interviews', { method: 'POST', body: JSON.stringify(data) }),
-  submitInterview: (interviewId: string, data: { transcript: string }) => fetchAPI(`/interviews/${interviewId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
+  submitInterview: (interviewId: string, data: { transcript: string; proctor_flags?: unknown[] }) =>
+    fetchAPI(`/interviews/${interviewId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
   getCompanyScheduledInterviews: () => fetchAPI('/interviews/company/scheduled', { method: 'GET' }),
   scheduleInterview: (data: { application_id: string; scheduled_at: string; notes?: string }) =>
     fetchAPI('/interviews/schedule', { method: 'POST', body: JSON.stringify(data) }),

@@ -26,6 +26,9 @@ import {
   LockKeyhole,
   Timer,
   ExternalLink,
+  Download,
+  Check,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,6 +36,7 @@ import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
 import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
 import { dispatchApplicationsUpdated } from "@/lib/use-nav-counts";
+import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,7 +59,7 @@ type Drive = {
 type Application = {
   id: string;
   drive_id: string;
-  drive?: { id: string };
+  drive?: { id: string; title?: string };
   current_stage?: string;
   has_interview?: boolean;
   interview_completed?: boolean;
@@ -105,18 +109,353 @@ const STAGE_LABELS: Record<string, { label: string; sublabel: string }> = {
   ai_interview: { label: "AI Video Interview", sublabel: "Async video interview evaluated by AI" },
   hr_round: { label: "HR Round", sublabel: "Live interview with recruiter" },
   hr: { label: "HR Round", sublabel: "Live interview with recruiter" },
+  offer: { label: "Job Offer", sublabel: "Official placement offer extended" },
+  offered: { label: "Job Offer", sublabel: "Official placement offer extended" },
+  hired: { label: "Final Hiring", sublabel: "Offer accepted and onboarding" },
 };
 
-function StepIcon({ status }: { status: string }) {
+type StepStatus = "completed" | "active" | "pending" | "rejected";
+
+interface ResolvedStep {
+  id: string;
+  label: string;
+  sublabel: string;
+  status: StepStatus;
+  badge?: {
+    text: string;
+    variant: "completed" | "active" | "rejected" | "pending";
+  };
+}
+
+function StepIcon({ status }: { status: StepStatus }) {
   if (status === "completed")
-    return <CheckCircle2 className="size-5 text-[#4F46E5]" />;
-  if (status === "active")
     return (
-      <div className="size-5 rounded-full border-2 border-[#4F46E5] flex items-center justify-center bg-[#EEF2FF]">
-        <div className="size-2 rounded-full bg-[#4F46E5]" />
+      <div className="size-6 rounded-full bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-600 shrink-0 shadow-xs">
+        <CheckCircle2 className="size-4 text-emerald-600" />
       </div>
     );
-  return <Circle className="size-5 text-muted-foreground/40" />;
+  if (status === "active")
+    return (
+      <div className="size-6 rounded-full border-2 border-[#4F46E5] flex items-center justify-center bg-[#EEF2FF] shrink-0 shadow-xs">
+        <div className="size-2 rounded-full bg-[#4F46E5] animate-pulse" />
+      </div>
+    );
+  if (status === "rejected")
+    return (
+      <div className="size-6 rounded-full bg-rose-100 border border-rose-300 flex items-center justify-center text-rose-600 shrink-0 shadow-xs">
+        <XCircle className="size-4 text-rose-600" />
+      </div>
+    );
+  return (
+    <div className="size-6 rounded-full border-2 border-border flex items-center justify-center bg-muted/40 shrink-0">
+      <Circle className="size-3 text-muted-foreground/30" />
+    </div>
+  );
+}
+
+function resolveSelectionStages(
+  rawStages: string[],
+  existingApp: Application | null,
+  applySuccess: boolean,
+  submission: Submission | null
+): ResolvedStep[] {
+  const hasApplied = Boolean(existingApp || applySuccess);
+  const currentStage = String(existingApp?.current_stage || (applySuccess ? "applied" : "")).toLowerCase();
+  const isRejected = currentStage === "rejected";
+  const isHired = currentStage === "hired" || existingApp?.offer_status === "accepted";
+  const isOffered = currentStage === "offered" || currentStage === "offer";
+
+  // Milestones verified by persistent data
+  const assessmentDone = Boolean(submission) || Boolean(existingApp?.assessment_completed);
+  const interviewDone = Boolean(existingApp?.interview_completed);
+
+  // Resume screening is completed if applicant moved forward or has completed assessment/interview
+  const resumeDone =
+    hasApplied &&
+    (assessmentDone ||
+      interviewDone ||
+      isOffered ||
+      isHired ||
+      [
+        "resume_screened",
+        "shortlisted",
+        "assessment",
+        "ai_interview",
+        "hr_round",
+        "hr",
+        "offered",
+        "offer",
+        "hired",
+      ].includes(currentStage));
+
+  const assessmentScore =
+    submission?.score !== undefined && submission?.score !== null
+      ? Math.round(Number(submission.score))
+      : existingApp?.assessment_score !== undefined && existingApp?.assessment_score !== null
+      ? Math.round(Number(existingApp.assessment_score))
+      : null;
+
+  return (rawStages ?? []).map((s, i) => {
+    const norm = s.toLowerCase().trim();
+    const cfg = STAGE_LABELS[norm] ?? {
+      label: s.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      sublabel: "",
+    };
+
+    if (!hasApplied) {
+      return {
+        id: s,
+        label: cfg.label,
+        sublabel: cfg.sublabel,
+        status: "pending",
+        badge: i === 0 ? { text: "Stage 1", variant: "pending" } : undefined,
+      };
+    }
+
+    // 1. Resume Screening
+    if (norm === "resume" || norm === "applied") {
+      if (resumeDone) {
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Resume screened and approved for next rounds",
+          status: "completed",
+          badge: { text: "Shortlisted ✓", variant: "completed" },
+        };
+      }
+      if (isRejected) {
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Resume did not meet current role criteria",
+          status: "rejected",
+          badge: { text: "Not Cleared", variant: "rejected" },
+        };
+      }
+      return {
+        id: s,
+        label: cfg.label,
+        sublabel: "AI resume screening in progress",
+        status: "active",
+        badge: { text: "Screening in Progress", variant: "active" },
+      };
+    }
+
+    // 2. Online Assessment
+    if (norm === "assessment") {
+      if (assessmentDone) {
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Assessment completed and submitted for evaluation",
+          status: "completed",
+          badge: {
+            text: assessmentScore !== null ? `Score: ${assessmentScore}% ✓` : "Completed ✓",
+            variant: "completed",
+          },
+        };
+      }
+      if (
+        interviewDone ||
+        isOffered ||
+        isHired ||
+        ["ai_interview", "hr_round", "hr", "offered", "offer", "hired"].includes(currentStage)
+      ) {
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Assessment requirement satisfied",
+          status: "completed",
+          badge: { text: "Completed ✓", variant: "completed" },
+        };
+      }
+      if (resumeDone) {
+        if (isRejected) {
+          return {
+            id: s,
+            label: cfg.label,
+            sublabel: "Assessment cutoff not met",
+            status: "rejected",
+            badge: { text: "Not Cleared", variant: "rejected" },
+          };
+        }
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Technical assessment window open — take test now",
+          status: "active",
+          badge: { text: "Test Live / Action Required", variant: "active" },
+        };
+      }
+      return {
+        id: s,
+        label: cfg.label,
+        sublabel: cfg.sublabel,
+        status: "pending",
+        badge: { text: "Upcoming", variant: "pending" },
+      };
+    }
+
+    // 3. AI Video Interview
+    if (norm === "ai_interview") {
+      if (interviewDone) {
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "AI Video Interview evaluated and responses submitted",
+          status: "completed",
+          badge: { text: "Interview Completed ✓", variant: "completed" },
+        };
+      }
+      if (
+        isOffered ||
+        isHired ||
+        ["hr_round", "hr", "offered", "offer", "hired"].includes(currentStage)
+      ) {
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Interview round cleared",
+          status: "completed",
+          badge: { text: "Cleared ✓", variant: "completed" },
+        };
+      }
+      if (
+        assessmentDone ||
+        currentStage === "ai_interview" ||
+        Boolean(existingApp?.has_interview)
+      ) {
+        if (isRejected) {
+          return {
+            id: s,
+            label: cfg.label,
+            sublabel: "Interview evaluation did not meet threshold",
+            status: "rejected",
+            badge: { text: "Not Cleared", variant: "rejected" },
+          };
+        }
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: existingApp?.has_interview
+            ? "AI video interview is scheduled and ready to start"
+            : "Next round: AI Video Interview",
+          status: "active",
+          badge: { text: "Ready to Take", variant: "active" },
+        };
+      }
+      return {
+        id: s,
+        label: cfg.label,
+        sublabel: cfg.sublabel,
+        status: "pending",
+        badge: { text: "Upcoming", variant: "pending" },
+      };
+    }
+
+    // 4. HR Round
+    if (norm === "hr_round" || norm === "hr") {
+      if (isHired || isOffered) {
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "HR interview successfully completed",
+          status: "completed",
+          badge: { text: "Cleared ✓", variant: "completed" },
+        };
+      }
+      if (currentStage === "hr_round" || currentStage === "hr") {
+        if (isRejected) {
+          return {
+            id: s,
+            label: cfg.label,
+            sublabel: "HR interview did not clear",
+            status: "rejected",
+            badge: { text: "Not Cleared", variant: "rejected" },
+          };
+        }
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Live recruiter interview scheduled / in progress",
+          status: "active",
+          badge: { text: "In Progress", variant: "active" },
+        };
+      }
+      if (interviewDone) {
+        if (isRejected) {
+          return {
+            id: s,
+            label: cfg.label,
+            sublabel: "Not selected for HR round",
+            status: "rejected",
+            badge: { text: "Not Cleared", variant: "rejected" },
+          };
+        }
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Under review by recruiter for HR interview schedule",
+          status: "active",
+          badge: { text: "Current Stage", variant: "active" },
+        };
+      }
+      return {
+        id: s,
+        label: cfg.label,
+        sublabel: cfg.sublabel,
+        status: "pending",
+        badge: { text: "Upcoming", variant: "pending" },
+      };
+    }
+
+    // 5. Job Offer
+    if (norm === "offer" || norm === "offered") {
+      if (isHired) {
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Offer accepted and verified",
+          status: "completed",
+          badge: { text: "Offer Accepted ✓", variant: "completed" },
+        };
+      }
+      if (isOffered) {
+        if (existingApp?.offer_status === "rejected") {
+          return {
+            id: s,
+            label: cfg.label,
+            sublabel: "Offer was declined by candidate",
+            status: "rejected",
+            badge: { text: "Offer Declined", variant: "rejected" },
+          };
+        }
+        return {
+          id: s,
+          label: cfg.label,
+          sublabel: "Official placement offer extended — response required",
+          status: "active",
+          badge: { text: "Decision Required", variant: "active" },
+        };
+      }
+      return {
+        id: s,
+        label: cfg.label,
+        sublabel: cfg.sublabel,
+        status: "pending",
+        badge: { text: "Upcoming", variant: "pending" },
+      };
+    }
+
+    // Generic fallback
+    return {
+      id: s,
+      label: cfg.label,
+      sublabel: cfg.sublabel,
+      status: "pending",
+      badge: undefined,
+    };
+  });
 }
 
 function companyDisplay(drive: Drive) {
@@ -173,6 +512,9 @@ export default function DriveDetailPage() {
   const [studentResumeUrl, setStudentResumeUrl] = useState<string | null>(null);
   /** "upcoming" = window not opened yet, "closed" = window ended */
   const [assessmentWindowBlock, setAssessmentWindowBlock] = useState<"upcoming" | "closed" | null>(null);
+  const [acceptedOtherApp, setAcceptedOtherApp] = useState<Application | null>(null);
+  const [respondingOffer, setRespondingOffer] = useState(false);
+  const [offerError, setOfferError] = useState<string | null>(null);
 
   const resumeInputRef = useRef<HTMLInputElement>(null);
   const [resumeUploading, setResumeUploading] = useState(false);
@@ -211,6 +553,30 @@ export default function DriveDetailPage() {
     }
   };
 
+  const handleOfferResponse = async (response: "accepted" | "rejected") => {
+    if (!existingApp) return;
+    try {
+      setRespondingOffer(true);
+      setOfferError(null);
+      await api.respondToOffer(existingApp.id, response);
+      setExistingApp((prev) =>
+        prev
+          ? {
+              ...prev,
+              offer_status: response,
+              current_stage: response === "accepted" ? "offered" : prev.current_stage,
+            }
+          : prev
+      );
+      dispatchNotificationsUpdated();
+      dispatchApplicationsUpdated();
+    } catch (err: unknown) {
+      setOfferError(err instanceof Error ? err.message : "Failed to respond to offer");
+    } finally {
+      setRespondingOffer(false);
+    }
+  };
+
   useEffect(() => {
     if (!driveId) return;
     const load = async () => {
@@ -240,6 +606,15 @@ export default function DriveDetailPage() {
             } catch {
               // Not submitted yet
             }
+          }
+          const other = myApps.find(
+            (a: Application) =>
+              (a.offer_status === "accepted" || a.current_stage === "hired") &&
+              a.drive_id !== driveId &&
+              a.drive?.id !== driveId
+          );
+          if (other) {
+            setAcceptedOtherApp(other);
           }
         } catch (e) {
           console.error("Could not fetch my applications:", e);
@@ -333,11 +708,12 @@ export default function DriveDetailPage() {
 
   const descriptionBlocks = (drive.description ?? "").split("\n\n").filter(Boolean);
 
-  const stages = (drive.selection_stages ?? []).map((s, i) => ({
-    id: s,
-    ...(STAGE_LABELS[s] ?? { label: s, sublabel: "" }),
-    status: i === 0 ? "active" : "pending",
-  }));
+  const stages = resolveSelectionStages(
+    drive.selection_stages ?? [],
+    existingApp,
+    applySuccess,
+    submission
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -543,14 +919,27 @@ export default function DriveDetailPage() {
                   <div className="space-y-0">
                     {stages.map((step, i) => {
                       const isLast = i === stages.length - 1;
+                      const isCompleted = step.status === "completed";
                       const isActive = step.status === "active";
+                      const isRejectedStep = step.status === "rejected";
+
+                      const badgeClasses = {
+                        completed: "bg-emerald-100 text-emerald-800",
+                        active: "bg-[#EEF2FF] text-[#3730A3]",
+                        rejected: "bg-rose-100 text-rose-700",
+                        pending: "bg-muted text-muted-foreground",
+                      };
+
                       return (
                         <div key={step.id} className="flex gap-4">
                           <div className="flex flex-col items-center">
                             <StepIcon status={step.status} />
                             {!isLast && (
                               <div
-                                className="w-0.5 flex-1 my-1 bg-border"
+                                className={cn(
+                                  "w-0.5 flex-1 my-1",
+                                  isCompleted ? "bg-emerald-300" : "bg-border"
+                                )}
                                 style={{ minHeight: 32 }}
                               />
                             )}
@@ -559,9 +948,13 @@ export default function DriveDetailPage() {
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <p
-                                  className={`text-sm font-medium ${
-                                    isActive ? "text-[#4F46E5]" : "text-muted-foreground"
-                                  }`}
+                                  className={cn(
+                                    "text-sm font-medium",
+                                    isActive && "text-[#4F46E5]",
+                                    isCompleted && "text-emerald-700",
+                                    isRejectedStep && "text-rose-600",
+                                    !isActive && !isCompleted && !isRejectedStep && "text-muted-foreground"
+                                  )}
                                 >
                                   {step.label}
                                 </p>
@@ -571,9 +964,14 @@ export default function DriveDetailPage() {
                                   </p>
                                 )}
                               </div>
-                              {isActive && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#EEF2FF] text-[#3730A3] shrink-0">
-                                  First stage
+                              {step.badge && (
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold shrink-0",
+                                    badgeClasses[step.badge.variant]
+                                  )}
+                                >
+                                  {step.badge.text}
                                 </span>
                               )}
                             </div>
@@ -635,6 +1033,95 @@ export default function DriveDetailPage() {
                       <div className="text-sm font-semibold text-[#065F46] bg-[#D1FAE5] p-3 rounded-lg text-center flex items-center justify-center gap-2">
                         <CheckCircle2 className="size-4" /> Application Submitted ✓
                       </div>
+
+                      {/* Offer Decision & Letter Card */}
+                      {Boolean(
+                        existingApp?.current_stage === "offered" ||
+                        existingApp?.current_stage === "hired" ||
+                        existingApp?.offer_status === "accepted" ||
+                        existingApp?.offer_status === "rejected" ||
+                        existingApp?.current_stage === "offer"
+                      ) && (
+                        <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300 space-y-3 shadow-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="size-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                              <Sparkles className="size-4" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                                Placement Offer
+                              </p>
+                              <p className="text-xs text-emerald-700 font-semibold">
+                                {drive.package || "Package Confirmed"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {existingApp?.offer_status === "rejected" ? (
+                            <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-center">
+                              <p className="text-xs font-bold text-rose-700">You declined this offer</p>
+                              <p className="text-[11px] text-rose-600 mt-0.5">
+                                The recruiter has been notified of your decision.
+                              </p>
+                            </div>
+                          ) : existingApp?.offer_status === "accepted" || existingApp?.current_stage === "hired" ? (
+                            <div className="space-y-2">
+                              <div className="p-2.5 rounded-lg bg-emerald-100/80 border border-emerald-300 text-center">
+                                <p className="text-xs font-bold text-emerald-900 flex items-center justify-center gap-1.5">
+                                  <CheckCircle2 className="size-4 text-emerald-700" />
+                                  Offer Accepted 🎉
+                                </p>
+                                <p className="text-[11px] text-emerald-800 mt-0.5">
+                                  You are placed! Campus placement policy now blocks applications to other drives.
+                                </p>
+                              </div>
+                              {(existingApp?.offer_letter_url as string | undefined) && (
+                                <a
+                                  href={existingApp!.offer_letter_url as string}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs"
+                                >
+                                  <Download className="size-3.5" />
+                                  Download Offer Letter (PDF)
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-2.5">
+                              <p className="text-xs text-emerald-900 leading-relaxed font-medium">
+                                Congratulations! {drive.title} has extended an official placement offer to you. Please accept or decline below:
+                              </p>
+                              {offerError && (
+                                <p className="text-[11px] text-rose-600 bg-rose-50 p-2 rounded border border-rose-200">
+                                  {offerError}
+                                </p>
+                              )}
+                              <div className="grid grid-cols-2 gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleOfferResponse("accepted")}
+                                  disabled={respondingOffer}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-9 gap-1"
+                                >
+                                  {respondingOffer ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3.5" />}
+                                  Accept Offer
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleOfferResponse("rejected")}
+                                  disabled={respondingOffer}
+                                  className="border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-semibold h-9 gap-1"
+                                >
+                                  {respondingOffer ? <Loader2 className="size-3 animate-spin" /> : <X className="size-3.5" />}
+                                  Decline
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* AI Video Interview Section if scheduled */}
                       {Boolean(existingApp?.has_interview) && (
@@ -767,6 +1254,33 @@ export default function DriveDetailPage() {
                         }
                         return null;
                       })()}
+                    </div>
+                  ) : acceptedOtherApp ? (
+                    <div className="space-y-3">
+                      <div className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 space-y-2 text-center">
+                        <div className="size-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                          <LockKeyhole className="size-5" />
+                        </div>
+                        <p className="text-xs font-bold text-amber-900">
+                          Placement Offer Accepted
+                        </p>
+                        <p className="text-[11px] text-amber-800 leading-relaxed">
+                          You have already accepted an offer with{" "}
+                          <strong>
+                            {acceptedOtherApp.drive?.title ?? "another company"}
+                          </strong>
+                          .
+                        </p>
+                        <p className="text-[10px] text-amber-700">
+                          As per campus placement guidelines, students with an accepted offer cannot apply to additional placement drives.
+                        </p>
+                        <Button
+                          disabled
+                          className="w-full bg-muted text-muted-foreground cursor-not-allowed text-xs font-semibold mt-2"
+                        >
+                          Applications Blocked (Placed)
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">

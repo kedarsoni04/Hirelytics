@@ -26,6 +26,8 @@ import {
   Calendar,
   Clock,
   Timer,
+  ShieldAlert,
+  UserMinus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -369,29 +371,6 @@ export default function CandidateListPage() {
     }
   }, [assessmentExists]);
 
-  const toggleSort = (field: SortField) => {
-    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortField(field);
-      setSortDir("desc");
-    }
-  };
-
-  const handleStageChange = async (appId: string, newStage: string) => {
-    try {
-      setUpdatingId(appId);
-      await api.updateApplicationStage(appId, newStage);
-      setApplications((prev) =>
-        prev.map((a) => (a.id === appId ? { ...a, current_stage: newStage } : a))
-      );
-      dispatchNotificationsUpdated();
-    } catch (err: unknown) {
-      console.error("[Candidate List] Stage change error:", err);
-      alert(err instanceof Error ? err.message : "Failed to update candidate stage");
-    } finally {
-      setUpdatingId(null);
-    }
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -567,6 +546,46 @@ export default function CandidateListPage() {
       </div>
     );
   }
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
+
+  const handleStageChange = async (appId: string, newStage: string) => {
+    try {
+      setUpdatingId(appId);
+      await api.updateApplicationStage(appId, newStage);
+      setApplications((prev) =>
+        prev.map((a) => (a.id === appId ? { ...a, current_stage: newStage } : a))
+      );
+      dispatchNotificationsUpdated();
+    } catch (err: unknown) {
+      console.error("[Stage update failed]", err);
+      alert(err instanceof Error ? err.message : "Failed to update stage");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleRemoveCandidate = async (appId: string) => {
+    if (!window.confirm("Are you sure you want to remove this candidate from the hiring process?")) return;
+    try {
+      setUpdatingId(appId);
+      await api.removeCandidateFromProcess(appId);
+      setApplications((prev) => prev.filter((a) => a.id !== appId));
+      dispatchNotificationsUpdated();
+    } catch (err: unknown) {
+      console.error("[Remove candidate failed]", err);
+      alert(err instanceof Error ? err.message : "Failed to remove candidate");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const sorted = [...applications]
     .filter((a) => stageFilter === "all" || a.current_stage === stageFilter)
@@ -818,6 +837,25 @@ export default function CandidateListPage() {
                         {student.full_name || "Unknown Candidate"}
                       </p>
                       <StageBadge stage={app.current_stage} />
+                      {Boolean(app.has_proctor_violations || ((app.proctor_flags_count as number) || 0) > 0) && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 border border-rose-200"
+                          title="Proctoring violation or tab switch detected"
+                        >
+                          <ShieldAlert className="size-3 text-rose-600" />
+                          Cheating Flagged ({Number(app.proctor_flags_count || 1)})
+                        </span>
+                      )}
+                      {app.offer_status === "rejected" && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                          Offer Declined
+                        </span>
+                      )}
+                      {app.offer_status === "accepted" && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          ✓ Offer Accepted
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs tracking-tight text-muted-foreground mt-0.5">
                       {student.branch || "Branch N/A"} · Applied {formatDate(app.applied_at)}
@@ -842,6 +880,19 @@ export default function CandidateListPage() {
 
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-1.5">
+                  {app.offer_status === "rejected" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveCandidate(app.id);
+                      }}
+                      disabled={updatingId === app.id}
+                      title="Remove Candidate from Process"
+                      className="size-8 rounded-lg flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors border border-rose-200"
+                    >
+                      <UserMinus className="size-4" />
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

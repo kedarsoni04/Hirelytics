@@ -15,3 +15,4 @@ cloudinary
 pdfplumber
 requests
 slowapi
+reportlab

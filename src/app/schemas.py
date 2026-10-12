@@ -240,6 +240,7 @@ class InterviewScheduleRequest(BaseModel):
 
 class InterviewSubmit(BaseModel):
     transcript: str  # from Whisper transcription (frontend sends audio, backend transcribes, or frontend sends transcript directly)
+    proctor_flags: Optional[List[Dict[str, Any]]] = []
 
 
 class InterviewOut(BaseModel):
@@ -251,8 +252,13 @@ class InterviewOut(BaseModel):
     transcript: Optional[str] = None
     video_url: Optional[str] = None
     sentiment_data: Optional[Dict[str, Any]] = None
+    proctor_flags: Optional[List[Dict[str, Any]]] = []
     scheduled_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+
+
+class OfferResponseRequest(BaseModel):
+    response: str  # 'accepted' or 'rejected'
 
 
 # ─────────────────────────────────────────────

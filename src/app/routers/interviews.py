@@ -256,18 +256,24 @@ def submit_interview(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Interview already submitted")
 
     sentiment_data = analyze_interview(payload.transcript, interview.questions)
+    flags = payload.proctor_flags or []
 
     interview.transcript = payload.transcript
     interview.sentiment_data = sentiment_data
+    interview.proctor_flags = flags
     interview.completed_at = datetime.now(timezone.utc)
     
     # Optionally move application stage
     interview.application.current_stage = models.ApplicationStage.ai_interview
 
+    action_label = f"Completed AI interview for {interview.application.drive.title}"
+    if any(isinstance(f, dict) and f.get("type") == "tab_switch" for f in flags):
+        action_label = f"AI interview terminated due to tab-switch violation for {interview.application.drive.title}"
+
     log = models.ActivityLog(
         user_id=current_user.id,
-        action=f"Completed AI interview for {interview.application.drive.title}",
-        log_metadata={"drive_id": interview.application.drive.id, "application_id": interview.application.id}
+        action=action_label,
+        log_metadata={"drive_id": interview.application.drive.id, "application_id": interview.application.id, "proctor_flags": flags}
     )
     db.add(log)
     
