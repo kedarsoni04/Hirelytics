@@ -91,8 +91,11 @@ export const api = {
   getMyCompanyDrives: () => fetchAPI('/drives/company/mine', { method: 'GET' }),
   getCompanyAnalytics: () => fetchAPI('/drives/company/analytics', { method: 'GET' }),
 
-  // Applications
-  applyToDrive: (driveId: string) => fetchAPI('/applications', { method: 'POST', body: JSON.stringify({ drive_id: driveId }) }),
+  applyToDrive: (driveId: string, resumeUrl?: string) =>
+    fetchAPI('/applications', {
+      method: 'POST',
+      body: JSON.stringify({ drive_id: driveId, ...(resumeUrl ? { resume_url: resumeUrl } : {}) }),
+    }),
   getMyApplications: () => fetchAPI('/applications/mine', { method: 'GET' }),
   getDriveApplications: (driveId: string) => fetchAPI(`/applications/drive/${driveId}`, { method: 'GET' }),
   updateApplicationStage: (id: string, stage: string) => fetchAPI(`/applications/${id}/stage`, { method: 'PATCH', body: JSON.stringify({ current_stage: stage }) }),

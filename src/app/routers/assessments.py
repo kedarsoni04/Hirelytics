@@ -123,7 +123,7 @@ def update_assessment_for_drive(
 @router.post("/generate-from-file", response_model=schemas.AssessmentGeneratedOut)
 async def generate_assessment_from_file(
     file: UploadFile = File(...),
-    drive_id: str = Form(...),
+    drive_id: Optional[str] = Form(None),
     num_questions: int = Form(10),
     custom_job_description: Optional[str] = Form(None),
     current_user: models.User = Depends(get_current_role(models.UserRole.company)),
@@ -133,12 +133,24 @@ async def generate_assessment_from_file(
     if not company:
         raise HTTPException(status_code=404, detail="Company profile not found")
 
-    drive = db.query(models.Drive).filter(models.Drive.id == drive_id).first()
-    if not drive:
-        raise HTTPException(status_code=404, detail="Drive not found")
+    jd = custom_job_description.strip() if custom_job_description and custom_job_description.strip() else ""
 
-    if drive.company_id != company.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operation not permitted")
+    if drive_id and drive_id.strip() and drive_id.strip().lower() not in ("none", "null", "undefined"):
+        drive = db.query(models.Drive).filter(models.Drive.id == drive_id.strip()).first()
+        if not drive:
+            raise HTTPException(status_code=404, detail="Drive not found")
+
+        if drive.company_id != company.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operation not permitted")
+
+        if not jd:
+            jd_parts = [drive.title or ""]
+            if drive.description:
+                jd_parts.append(drive.description)
+            jd = "\n".join(jd_parts)
+    else:
+        if not jd:
+            jd = "Campus Recruitment Technical Assessment"
 
     filename = file.filename or "upload"
     allowed_exts = (".pdf", ".csv", ".txt")
@@ -153,13 +165,6 @@ async def generate_assessment_from_file(
         raise HTTPException(status_code=400, detail="File size exceeds maximum limit of 10MB.")
 
     target_count = max(1, min(50, int(num_questions)))
-
-    jd = custom_job_description.strip() if custom_job_description and custom_job_description.strip() else ""
-    if not jd:
-        jd_parts = [drive.title or ""]
-        if drive.description:
-            jd_parts.append(drive.description)
-        jd = "\n".join(jd_parts)
 
     generated = ai_service.generate_assessment_questions_from_file(
         file_bytes=file_bytes,

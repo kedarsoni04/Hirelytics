@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -25,6 +25,7 @@ import {
   Upload,
   LockKeyhole,
   Timer,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -172,6 +173,43 @@ export default function DriveDetailPage() {
   /** "upcoming" = window not opened yet, "closed" = window ended */
   const [assessmentWindowBlock, setAssessmentWindowBlock] = useState<"upcoming" | "closed" | null>(null);
 
+  const resumeInputRef = useRef<HTMLInputElement>(null);
+  const [resumeUploading, setResumeUploading] = useState(false);
+  const [resumeUploadError, setResumeUploadError] = useState<string | null>(null);
+  const [resumeUploadSuccess, setResumeUploadSuccess] = useState<string | null>(null);
+
+  const handleResumeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setResumeUploadError("Only PDF files are accepted.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setResumeUploadError("File too large. Maximum size is 5 MB.");
+      return;
+    }
+
+    setResumeUploadError(null);
+    setResumeUploadSuccess(null);
+    setResumeUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const updated = await api.uploadResume(formData);
+      setStudentResumeUrl(updated.resume_url);
+      setResumeUploadSuccess("Resume attached successfully for screening!");
+      setApplyError(null);
+      setTimeout(() => setResumeUploadSuccess(null), 4000);
+    } catch (err: unknown) {
+      setResumeUploadError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    } finally {
+      setResumeUploading(false);
+      if (resumeInputRef.current) resumeInputRef.current.value = "";
+    }
+  };
+
   useEffect(() => {
     if (!driveId) return;
     const load = async () => {
@@ -246,10 +284,10 @@ export default function DriveDetailPage() {
   const handleApply = async () => {
     if (!drive) return;
 
-    // Guard: resume is mandatory for the first stage (resume screening)
+    // Strict guard: resume is mandatory for the first stage (resume screening)
     if (!studentResumeUrl) {
       setApplyError(
-        "A resume is required to apply. Please upload your resume from your Profile page before applying."
+        "A resume is required to apply. Resume screening is the first stage of the selection process."
       );
       return;
     }
@@ -257,7 +295,7 @@ export default function DriveDetailPage() {
     try {
       setApplying(true);
       setApplyError(null);
-      const newApp = await api.applyToDrive(drive.id);
+      const newApp = await api.applyToDrive(drive.id, studentResumeUrl);
       setApplySuccess(true);
       setExistingApp(newApp);
       dispatchNotificationsUpdated();
@@ -713,33 +751,114 @@ export default function DriveDetailPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {/* Resume gate warning */}
-                      {!studentResumeUrl && (
-                        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-2">
-                          <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
-                            <Upload className="size-3.5" /> Resume Required
-                          </p>
-                          <p className="text-[11px] text-amber-700 leading-relaxed">
-                            You must upload a resume before applying. Resume screening is the first stage of the selection process.
-                          </p>
-                          <Link href="/resume">
-                            <Button size="sm" variant="outline" className="w-full text-xs h-7 border-amber-300 text-amber-800 hover:bg-amber-100">
-                              Upload Resume →
-                            </Button>
-                          </Link>
+                      {/* Hidden File Input for in-place resume upload */}
+                      <input
+                        ref={resumeInputRef}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        className="hidden"
+                        onChange={handleResumeFileChange}
+                      />
+
+                      {/* Resume screening stage requirement card */}
+                      <div className="p-3.5 rounded-xl border border-indigo-100 bg-gradient-to-b from-indigo-50/50 to-card space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                            <FileText className="size-3.5 text-[#4F46E5]" />
+                            Stage 1: Resume Screening
+                          </span>
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                            Mandatory
+                          </span>
                         </div>
-                      )}
+
+                        {studentResumeUrl ? (
+                          <div className="space-y-2">
+                            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs">
+                              <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-[11px] text-emerald-900">
+                                  Resume Attached
+                                </p>
+                                <p className="text-[11px] text-emerald-700 mt-0.5">
+                                  Your resume will be screened by AI as stage 1 of the hiring process.
+                                </p>
+                                <div className="flex items-center gap-2 mt-2 text-[11px]">
+                                  <a
+                                    href={studentResumeUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-emerald-700 hover:text-emerald-900 underline inline-flex items-center gap-1 font-medium"
+                                  >
+                                    View Resume <ExternalLink className="size-2.5" />
+                                  </a>
+                                  <span className="text-emerald-400">•</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => resumeInputRef.current?.click()}
+                                    disabled={resumeUploading}
+                                    className="text-indigo-600 hover:text-indigo-800 underline font-medium"
+                                  >
+                                    {resumeUploading ? "Uploading..." : "Replace PDF"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+                            <div className="flex items-start gap-1.5">
+                              <AlertCircle className="size-4 shrink-0 text-amber-600 mt-0.5" />
+                              <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                                Resume screening is the mandatory 1st stage of hiring. You must add your resume before applying.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => resumeInputRef.current?.click()}
+                              disabled={resumeUploading}
+                              className="w-full text-xs h-8 border-amber-300 text-amber-900 hover:bg-amber-100 gap-1.5 font-medium bg-white shadow-xs"
+                            >
+                              {resumeUploading ? (
+                                <>
+                                  <Loader2 className="size-3.5 animate-spin" /> Uploading PDF...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="size-3.5" /> Upload Resume (PDF)
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
+
+                        {resumeUploadError && (
+                          <p className="text-[11px] text-rose-600 font-medium bg-rose-50 p-2 rounded border border-rose-200">
+                            {resumeUploadError}
+                          </p>
+                        )}
+                        {resumeUploadSuccess && (
+                          <p className="text-[11px] text-emerald-600 font-medium bg-emerald-50 p-2 rounded border border-emerald-200">
+                            {resumeUploadSuccess}
+                          </p>
+                        )}
+                      </div>
+
                       <Button 
                         className="w-full brand-gradient text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
                         onClick={handleApply}
-                        disabled={applying || !studentResumeUrl}
-                        title={!studentResumeUrl ? "Upload your resume first" : undefined}
+                        disabled={applying || !studentResumeUrl || resumeUploading}
+                        title={!studentResumeUrl ? "Resume addition is mandatory for Stage 1 screening" : undefined}
                       >
                         {applying ? (
                           <>
                             <Loader2 className="size-4 mr-2 animate-spin" />
                             Applying...
                           </>
+                        ) : !studentResumeUrl ? (
+                          "Attach Resume to Apply"
                         ) : (
                           "Apply Now"
                         )}

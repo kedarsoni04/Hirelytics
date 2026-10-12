@@ -234,30 +234,6 @@ export default function CandidateListPage() {
     checkAssessment();
   }, [driveId]);
 
-  const toggleSort = (field: SortField) => {
-    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortField(field);
-      setSortDir("desc");
-    }
-  };
-
-  const handleStageChange = async (appId: string, newStage: string) => {
-    try {
-      setUpdatingId(appId);
-      await api.updateApplicationStage(appId, newStage);
-      setApplications((prev) =>
-        prev.map((a) => (a.id === appId ? { ...a, current_stage: newStage } : a))
-      );
-      dispatchNotificationsUpdated();
-    } catch (err: unknown) {
-      console.error("[Candidate List] Stage change error:", err);
-      alert(err instanceof Error ? err.message : "Failed to update candidate stage");
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
   // ── Assessment question helpers ──────────────────────────────────────────────
 
   const openCreateModal = () => {
@@ -307,6 +283,43 @@ export default function CandidateListPage() {
       alert("Failed to load existing assessment.");
     } finally {
       setLoadingAssessment(false);
+    }
+  };
+
+  useEffect(() => {
+    if (assessmentExists !== null && typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("openAssessment") === "true") {
+        if (assessmentExists) {
+          openEditModal();
+        } else {
+          openCreateModal();
+        }
+      }
+    }
+  }, [assessmentExists]);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
+
+  const handleStageChange = async (appId: string, newStage: string) => {
+    try {
+      setUpdatingId(appId);
+      await api.updateApplicationStage(appId, newStage);
+      setApplications((prev) =>
+        prev.map((a) => (a.id === appId ? { ...a, current_stage: newStage } : a))
+      );
+      dispatchNotificationsUpdated();
+    } catch (err: unknown) {
+      console.error("[Candidate List] Stage change error:", err);
+      alert(err instanceof Error ? err.message : "Failed to update candidate stage");
+    } finally {
+      setUpdatingId(null);
     }
   };
 

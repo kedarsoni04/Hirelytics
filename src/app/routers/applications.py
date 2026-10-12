@@ -136,12 +136,17 @@ def apply_to_drive(
             detail="Cannot apply to a drive that is not live",
         )
 
-    # Resume is mandatory — it is the first stage of the selection process
-    if not student.resume_url:
+    # Resume is mandatory — it is the first stage of the selection process (Resume Screening)
+    effective_resume_url = payload.resume_url or student.resume_url
+    if not effective_resume_url:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="A resume is required to apply. Please upload your resume from your profile before applying.",
+            detail="A resume is required to apply. Resume screening is the first stage of the hiring process. Please attach a resume before submitting.",
         )
+
+    if payload.resume_url and payload.resume_url != student.resume_url:
+        student.resume_url = payload.resume_url
+        db.add(student)
 
     existing = (
         db.query(models.Application)

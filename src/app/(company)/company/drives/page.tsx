@@ -16,6 +16,7 @@ import {
   Clock,
   Layers,
   GraduationCap,
+  ClipboardCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -378,6 +379,19 @@ export default function CompanyDrivesPage() {
                         >
                           {isPublishing ? <Loader2 className="size-3.5 animate-spin" /> : "Publish Live"}
                         </Button>
+                      )}
+
+                      {drive.selection_stages?.includes("assessment") && (
+                        <Link href={`/company/drives/${drive.id}/candidates?openAssessment=true`}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs font-semibold gap-1.5 border-[#4F46E5]/40 text-[#4F46E5] hover:bg-[#EEF2FF]"
+                          >
+                            <ClipboardCheck className="size-3.5" />
+                            Assessment (CSV/PDF)
+                          </Button>
+                        </Link>
                       )}
 
                       <Link href={`/company/drives/${drive.id}/candidates`}>
