@@ -23,6 +23,9 @@ import {
   FileText,
   Check,
   HelpCircle,
+  Calendar,
+  Clock,
+  Timer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -90,6 +93,33 @@ function formatDate(iso: string | null | undefined) {
     });
   } catch {
     return iso;
+  }
+}
+
+function toDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const mins = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${mins}`;
+}
+
+function formatDateTimeWindow(iso: string | null | undefined): string {
+  if (!iso) return "N/A";
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(iso);
   }
 }
 
@@ -181,6 +211,11 @@ export default function CandidateListPage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [questions, setQuestions] = useState<MCQQuestion[]>([makeBlankQuestion()]);
   const [durationMins, setDurationMins] = useState(30);
+  const [assessmentStart, setAssessmentStart] = useState("");
+  const [assessmentEnd, setAssessmentEnd] = useState("");
+  const [currentAssessmentStart, setCurrentAssessmentStart] = useState<string | null>(null);
+  const [currentAssessmentEnd, setCurrentAssessmentEnd] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(0);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
@@ -219,6 +254,8 @@ export default function CandidateListPage() {
     try {
       const data = await api.getDriveAssessment(driveId);
       setAssessmentExists(true);
+      setCurrentAssessmentStart(data.assessment_start || null);
+      setCurrentAssessmentEnd(data.assessment_end || null);
       if (data && Array.isArray(data.questions)) {
         setExistingQuestionCount(data.questions.length);
       }
@@ -226,10 +263,39 @@ export default function CandidateListPage() {
       // 404 means no assessment yet
       setAssessmentExists(false);
       setExistingQuestionCount(0);
+      setCurrentAssessmentStart(null);
+      setCurrentAssessmentEnd(null);
+    }
+  };
+
+  const setPresetWindow = (type: "24h" | "48h" | "tomorrow" | "clear") => {
+    if (type === "clear") {
+      setAssessmentStart("");
+      setAssessmentEnd("");
+      return;
+    }
+    const now = new Date();
+    if (type === "24h") {
+      const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      setAssessmentStart(toDatetimeLocal(now.toISOString()));
+      setAssessmentEnd(toDatetimeLocal(end.toISOString()));
+    } else if (type === "48h") {
+      const end = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+      setAssessmentStart(toDatetimeLocal(now.toISOString()));
+      setAssessmentEnd(toDatetimeLocal(end.toISOString()));
+    } else if (type === "tomorrow") {
+      const start = new Date(now);
+      start.setDate(start.getDate() + 1);
+      start.setHours(9, 0, 0, 0);
+      const end = new Date(start);
+      end.setHours(21, 0, 0, 0); // 9pm
+      setAssessmentStart(toDatetimeLocal(start.toISOString()));
+      setAssessmentEnd(toDatetimeLocal(end.toISOString()));
     }
   };
 
   useEffect(() => {
+    setNowMs(Date.now());
     loadData();
     checkAssessment();
   }, [driveId]);
@@ -240,6 +306,8 @@ export default function CandidateListPage() {
     setIsEditMode(false);
     setQuestions([makeBlankQuestion()]);
     setDurationMins(30);
+    setAssessmentStart("");
+    setAssessmentEnd("");
     setPublishError(null);
     setAiFile(null);
     setAiError(null);
@@ -254,6 +322,8 @@ export default function CandidateListPage() {
       const data = await api.getDriveAssessment(driveId);
       if (data) {
         setDurationMins(data.duration_mins || 30);
+        setAssessmentStart(data.assessment_start ? toDatetimeLocal(data.assessment_start) : "");
+        setAssessmentEnd(data.assessment_end ? toDatetimeLocal(data.assessment_end) : "");
         if (Array.isArray(data.questions) && data.questions.length > 0) {
           setQuestions(
             data.questions.map((q: RawQuestionInput) => ({
@@ -448,6 +518,8 @@ export default function CandidateListPage() {
           correct_option: q.correct_option,
         })),
         duration_mins: durationMins,
+        assessment_start: assessmentStart ? new Date(assessmentStart).toISOString() : null,
+        assessment_end: assessmentEnd ? new Date(assessmentEnd).toISOString() : null,
       };
 
       if (isEditMode) {
@@ -458,6 +530,8 @@ export default function CandidateListPage() {
 
       setAssessmentExists(true);
       setExistingQuestionCount(questions.length);
+      setCurrentAssessmentStart(payload.assessment_start);
+      setCurrentAssessmentEnd(payload.assessment_end);
       setCreateModalOpen(false);
       dispatchNotificationsUpdated();
     } catch (err: unknown) {
@@ -550,21 +624,57 @@ export default function CandidateListPage() {
           {assessmentExists === null ? (
             <div className="w-36 h-8 rounded-lg bg-muted animate-pulse" />
           ) : assessmentExists ? (
-            <Button
-              id="edit-assessment-btn"
-              onClick={openEditModal}
-              size="sm"
-              variant="outline"
-              disabled={loadingAssessment}
-              className="gap-1.5 border-[#4F46E5]/40 text-[#4F46E5] hover:bg-[#EEF2FF] text-xs font-semibold shadow-sm"
-            >
-              {loadingAssessment ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <ClipboardCheck className="size-3.5" />
-              )}
-              Manage Assessment {existingQuestionCount > 0 ? `(${existingQuestionCount} Qs)` : "✓"}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {(() => {
+                if (!nowMs) return null;
+                const startMs = currentAssessmentStart ? new Date(currentAssessmentStart).getTime() : null;
+                const endMs = currentAssessmentEnd ? new Date(currentAssessmentEnd).getTime() : null;
+                const isLive = (!startMs || nowMs >= startMs) && (!endMs || nowMs <= endMs) && Boolean(startMs || endMs);
+                const isUpcoming = startMs && nowMs < startMs;
+                const isClosed = endMs && nowMs > endMs;
+
+                if (isLive) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700">
+                      <span className="size-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                      Exam Live {currentAssessmentEnd ? `(Ends ${formatDateTimeWindow(currentAssessmentEnd)})` : ""}
+                    </span>
+                  );
+                }
+                if (isUpcoming) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-800">
+                      <Calendar className="size-3.5 text-amber-600" />
+                      Scheduled: {formatDateTimeWindow(currentAssessmentStart)}
+                    </span>
+                  );
+                }
+                if (isClosed) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-50 border border-rose-200 text-rose-700">
+                      <Clock className="size-3.5" />
+                      Window Closed
+                    </span>
+                  );
+                }
+                return null;
+              })()}
+              <Button
+                id="edit-assessment-btn"
+                onClick={openEditModal}
+                size="sm"
+                variant="outline"
+                disabled={loadingAssessment}
+                className="gap-1.5 border-[#4F46E5]/40 text-[#4F46E5] hover:bg-[#EEF2FF] text-xs font-semibold shadow-sm"
+              >
+                {loadingAssessment ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <ClipboardCheck className="size-3.5" />
+                )}
+                Manage Assessment {existingQuestionCount > 0 ? `(${existingQuestionCount} Qs)` : "✓"}
+              </Button>
+            </div>
           ) : (
             <Button
               id="create-assessment-btn"
@@ -977,27 +1087,125 @@ export default function CandidateListPage() {
             )}
           </div>
 
-          {/* Assessment Global Settings */}
-          <div className="flex flex-wrap items-center justify-between gap-4 py-1">
-            <div className="flex items-center gap-3">
-              <Label htmlFor="assessment-duration" className="text-xs font-semibold shrink-0">
-                Duration (minutes)
-              </Label>
-              <Input
-                id="assessment-duration"
-                type="number"
-                min={5}
-                max={180}
-                value={durationMins}
-                onChange={(e) => setDurationMins(Math.max(5, parseInt(e.target.value) || 30))}
-                className="w-24 h-8 text-xs"
-              />
+          {/* ── Online Exam Live Window & Timing ── */}
+          <div className="p-4 rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/70 via-white to-indigo-50/40 space-y-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="size-8 rounded-lg bg-[#4F46E5]/10 text-[#4F46E5] flex items-center justify-center shrink-0">
+                  <Calendar className="size-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-foreground flex items-center gap-2">
+                    Online Exam Live Window &amp; Deadline
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-[#4F46E5]">
+                      Shortlisted Candidates Only
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground">
+                    Candidates only see and take this assessment once shortlisted, and strictly between the start &amp; deadline window.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPresetWindow("24h")}
+                  className="h-6 px-2 text-[10px] font-medium"
+                >
+                  Live 24h
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPresetWindow("48h")}
+                  className="h-6 px-2 text-[10px] font-medium"
+                >
+                  Live 48h
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPresetWindow("tomorrow")}
+                  className="h-6 px-2 text-[10px] font-medium"
+                >
+                  Tomorrow
+                </Button>
+                {(assessmentStart || assessmentEnd) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPresetWindow("clear")}
+                    className="h-6 px-2 text-[10px] text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                  >
+                    Clear Window
+                  </Button>
+                )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Total Questions: <strong className="text-foreground">{questions.length}</strong></span>
-              <span>•</span>
-              <span className="text-emerald-600 font-semibold">4 options per question</span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Window Start */}
+              <div className="space-y-1">
+                <Label htmlFor="assessment-start" className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                  <Clock className="size-3 text-[#4F46E5]" /> Exam Opens (Goes Live)
+                </Label>
+                <Input
+                  id="assessment-start"
+                  type="datetime-local"
+                  value={assessmentStart}
+                  onChange={(e) => setAssessmentStart(e.target.value)}
+                  className="h-8 text-xs bg-white"
+                />
+              </div>
+
+              {/* Window End / Deadline */}
+              <div className="space-y-1">
+                <Label htmlFor="assessment-end" className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                  <Timer className="size-3 text-rose-500" /> Exam Closes (Strict Deadline)
+                </Label>
+                <Input
+                  id="assessment-end"
+                  type="datetime-local"
+                  value={assessmentEnd}
+                  onChange={(e) => setAssessmentEnd(e.target.value)}
+                  className="h-8 text-xs bg-white"
+                />
+              </div>
+
+              {/* Duration in Minutes */}
+              <div className="space-y-1">
+                <Label htmlFor="assessment-duration" className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                  Duration (per candidate attempt)
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="assessment-duration"
+                    type="number"
+                    min={5}
+                    max={180}
+                    value={durationMins}
+                    onChange={(e) => setDurationMins(Math.max(5, parseInt(e.target.value) || 30))}
+                    className="h-8 text-xs bg-white w-24"
+                  />
+                  <span className="text-xs text-muted-foreground">mins</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-indigo-100/60">
+              <span className="flex items-center gap-1">
+                Total Questions: <strong className="text-foreground">{questions.length}</strong>
+              </span>
+              <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                <Check className="size-3" /> Anti-cheat proctoring active
+              </span>
             </div>
           </div>
 

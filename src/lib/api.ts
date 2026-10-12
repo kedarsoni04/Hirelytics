@@ -103,9 +103,9 @@ export const api = {
 
   // Assessments
   getDriveAssessment: (driveId: string) => fetchAPI(`/assessments/drive/${driveId}`, { method: 'GET' }),
-  createAssessment: (data: { drive_id: string; questions: Record<string, unknown>[]; duration_mins: number }) =>
+  createAssessment: (data: { drive_id: string; questions: Record<string, unknown>[]; duration_mins: number; assessment_start?: string | null; assessment_end?: string | null }) =>
     fetchAPI('/assessments', { method: 'POST', body: JSON.stringify(data) }),
-  updateAssessment: (driveId: string, data: { questions: Record<string, unknown>[]; duration_mins: number }) =>
+  updateAssessment: (driveId: string, data: { questions: Record<string, unknown>[]; duration_mins: number; assessment_start?: string | null; assessment_end?: string | null }) =>
     fetchAPI(`/assessments/drive/${driveId}`, { method: 'PUT', body: JSON.stringify(data) }),
   generateAssessmentQuestionsFromFile: (formData: FormData) =>
     fetchAPI('/assessments/generate-from-file', { method: 'POST', body: formData }),

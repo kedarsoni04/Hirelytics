@@ -42,6 +42,10 @@ class ApplicationDetailOut(schemas.ApplicationOut):
     has_assessment: Optional[bool] = False
     assessment_completed: Optional[bool] = False
     assessment_score: Optional[float] = None
+    assessment_start: Optional[datetime] = None
+    assessment_end: Optional[datetime] = None
+    assessment_duration_mins: Optional[int] = None
+    is_shortlisted: Optional[bool] = False
     has_interview: Optional[bool] = False
     interview_completed: Optional[bool] = False
     interview_scheduled_at: Optional[datetime] = None
@@ -81,6 +85,21 @@ def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
     )
 
     has_assessment = bool(app_obj.drive and app_obj.drive.assessment)
+    assess_obj = getattr(app_obj.drive, "assessment", None) if app_obj.drive else None
+    assessment_start = assess_obj.assessment_start if assess_obj else None
+    assessment_end = assess_obj.assessment_end if assess_obj else None
+    assessment_duration_mins = int(assess_obj.duration_mins) if assess_obj and assess_obj.duration_mins else None
+
+    shortlisted_stages = {
+        models.ApplicationStage.shortlisted,
+        models.ApplicationStage.assessment,
+        models.ApplicationStage.ai_interview,
+        models.ApplicationStage.hr_round,
+        models.ApplicationStage.offered,
+        models.ApplicationStage.hired,
+    }
+    is_shortlisted = app_obj.current_stage in shortlisted_stages
+
     submission_obj = getattr(app_obj, "assessment_submission", None)
     assessment_completed = bool(submission_obj is not None)
     assessment_score = (
@@ -108,6 +127,10 @@ def format_application_response(app_obj: models.Application) -> Dict[str, Any]:
         "has_assessment": has_assessment,
         "assessment_completed": assessment_completed,
         "assessment_score": assessment_score,
+        "assessment_start": assessment_start,
+        "assessment_end": assessment_end,
+        "assessment_duration_mins": assessment_duration_mins,
+        "is_shortlisted": is_shortlisted,
         "has_interview": has_interview,
         "interview_completed": interview_completed,
         "interview_scheduled_at": interview_scheduled_at,

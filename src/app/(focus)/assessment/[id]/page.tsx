@@ -13,6 +13,10 @@ import {
   CheckCircle2,
   ArrowRight,
   Trophy,
+  Calendar,
+  Timer,
+  LockKeyhole,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,6 +70,8 @@ export default function AssessmentPage() {
   const [error, setError] = useState<string | null>(null);
   /** "upcoming" = window not opened yet, "closed" = window ended, null = no window issue */
   const [windowStatus, setWindowStatus] = useState<"upcoming" | "closed" | null>(null);
+  const [notShortlisted, setNotShortlisted] = useState(false);
+  const [candidateStage, setCandidateStage] = useState<string>("applied");
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -94,7 +100,7 @@ export default function AssessmentPage() {
     maxViolations: MAX_VIOLATIONS,
     onForceSubmit: handleForceSubmit,
     // Disable proctoring once submitted, while loading, or before the user acknowledges rules
-    enabled: !submissionResult && !loading && acknowledged,
+    enabled: !submissionResult && !loading && acknowledged && !notShortlisted,
   });
 
   useEffect(() => {
@@ -104,9 +110,11 @@ export default function AssessmentPage() {
       try {
         setLoading(true);
         setError(null);
+        setNotShortlisted(false);
 
         let resolvedDriveId = rawId;
         let resolvedAppId: string | null = null;
+        let appStage: string | null = null;
 
         // Try to see if rawId is an application_id first, or drive_id
         try {
@@ -114,6 +122,7 @@ export default function AssessmentPage() {
           if (app) {
             resolvedAppId = app.id;
             resolvedDriveId = app.drive_id;
+            appStage = app.current_stage;
             if (app.drive?.title) setDriveTitle(app.drive.title);
           }
         } catch {
@@ -122,12 +131,13 @@ export default function AssessmentPage() {
         }
 
         // Find student's application for this drive if not already resolved
-        if (!resolvedAppId) {
+        if (!resolvedAppId || !appStage) {
           try {
             const myApps = await api.getMyApplications();
-            const matchingApp = myApps.find((a: { drive_id: string; id: string; drive?: { id: string; title?: string } }) => a.drive_id === resolvedDriveId || a.drive?.id === resolvedDriveId);
+            const matchingApp = myApps.find((a: { drive_id: string; id: string; current_stage: string; drive?: { id: string; title?: string } }) => a.drive_id === resolvedDriveId || a.drive?.id === resolvedDriveId);
             if (matchingApp) {
               resolvedAppId = matchingApp.id;
+              appStage = matchingApp.current_stage;
               if (matchingApp.drive?.title) setDriveTitle(matchingApp.drive.title);
             }
           } catch (e) {
@@ -137,10 +147,34 @@ export default function AssessmentPage() {
 
         setApplicationId(resolvedAppId);
 
+        // Check shortlisting gate: candidate must be shortlisted before taking the exam
+        if (appStage) {
+          setCandidateStage(appStage);
+          const isShortlisted = ["shortlisted", "assessment", "ai_interview", "hr_round", "offer", "offered", "hired"].includes(appStage);
+          if (!isShortlisted) {
+            setNotShortlisted(true);
+            setLoading(false);
+            return;
+          }
+        }
+
         // Fetch assessment for drive
         try {
           const assessData = await api.getDriveAssessment(resolvedDriveId);
           setAssessment(assessData);
+
+          // Check window timeline relative to current time
+          if (assessData) {
+            const nowMs = Date.now();
+            const startMs = assessData.assessment_start ? new Date(assessData.assessment_start).getTime() : null;
+            const endMs = assessData.assessment_end ? new Date(assessData.assessment_end).getTime() : null;
+
+            if (startMs && nowMs < startMs) {
+              setWindowStatus("upcoming");
+            } else if (endMs && nowMs > endMs) {
+              setWindowStatus("closed");
+            }
+          }
         } catch (fetchErr: unknown) {
           // Check if backend told us the window isn't open yet or already closed
           const msg = fetchErr instanceof Error ? fetchErr.message : "";
@@ -229,23 +263,71 @@ export default function AssessmentPage() {
     );
   }
 
+  // Not shortlisted gate
+  if (notShortlisted) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6 bg-[#F8FAFC]">
+        <Card className="border-border/60 max-w-lg w-full card-shadow text-center p-8 space-y-5 bg-white">
+          <div className="size-16 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+            <ShieldAlert className="size-8" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Assessment Reserved for Shortlisted Candidates</h1>
+            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+              This online exam is only accessible to candidates whose profiles have been reviewed and shortlisted after initial resume screening.
+            </p>
+          </div>
+          <div className="p-3.5 rounded-xl bg-muted/40 border border-border text-xs text-muted-foreground flex items-center justify-between">
+            <span>Your Current Application Stage:</span>
+            <span className="font-bold text-[#4F46E5] uppercase tracking-wider text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200">
+              {candidateStage.replace(/_/g, " ")}
+            </span>
+          </div>
+          <div className="p-3 rounded-lg bg-indigo-50/50 border border-indigo-100 text-[11px] text-muted-foreground text-left">
+            💡 Once the company completes resume screening and shortlists your application, the online exam will become available during its scheduled live window.
+          </div>
+          <Link href="/applications" className="block pt-2">
+            <Button className="w-full brand-gradient text-white font-semibold text-xs">
+              Return to My Applications
+            </Button>
+          </Link>
+        </Card>
+      </div>
+    );
+  }
+
   // Assessment window hasn't opened yet
   if (windowStatus === "upcoming") {
     return (
-      <div className="flex items-center justify-center min-h-screen p-6">
-        <Card className="border-amber-200 bg-amber-50 max-w-lg w-full">
-          <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
-            <AlertCircle className="size-8 text-amber-500" />
-            <h2 className="text-base font-bold text-amber-800">Assessment Not Yet Open</h2>
-            <p className="text-xs text-amber-700">
-              The assessment window opens after the registration deadline ends. Please check back later.
+      <div className="flex items-center justify-center min-h-screen p-6 bg-[#F8FAFC]">
+        <Card className="border-amber-200 bg-white max-w-lg w-full card-shadow text-center p-8 space-y-5">
+          <div className="size-16 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+            <Timer className="size-8" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Assessment Not Yet Live</h2>
+            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+              This online exam has been scheduled but has not opened yet. It will become live during the configured time window.
             </p>
-            <Link href="/applications">
-              <Button size="sm" variant="outline" className="text-xs mt-3">
-                Back to My Applications
-              </Button>
-            </Link>
-          </CardContent>
+          </div>
+          {assessment?.assessment_start && (
+            <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 space-y-1">
+              <p className="font-bold flex items-center justify-center gap-1.5">
+                <Calendar className="size-3.5 text-amber-600" />
+                Opens: {new Date(assessment.assessment_start).toLocaleString("en-IN", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+              </p>
+              {assessment?.assessment_end && (
+                <p className="text-[11px] text-amber-700">
+                  Deadline: {new Date(assessment.assessment_end).toLocaleString("en-IN", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                </p>
+              )}
+            </div>
+          )}
+          <Link href="/applications" className="block pt-2">
+            <Button variant="outline" className="w-full text-xs">
+              Back to My Applications
+            </Button>
+          </Link>
         </Card>
       </div>
     );
@@ -254,20 +336,27 @@ export default function AssessmentPage() {
   // Assessment window has closed
   if (windowStatus === "closed") {
     return (
-      <div className="flex items-center justify-center min-h-screen p-6">
-        <Card className="border-slate-200 bg-slate-50 max-w-lg w-full">
-          <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
-            <AlertCircle className="size-8 text-slate-500" />
-            <h2 className="text-base font-bold text-slate-700">Assessment Window Closed</h2>
-            <p className="text-xs text-slate-600">
-              The deadline to take this assessment has passed. Submissions are no longer accepted.
+      <div className="flex items-center justify-center min-h-screen p-6 bg-[#F8FAFC]">
+        <Card className="border-slate-200 bg-white max-w-lg w-full card-shadow text-center p-8 space-y-5">
+          <div className="size-16 rounded-2xl bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center mx-auto">
+            <LockKeyhole className="size-8" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Assessment Window Closed</h2>
+            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+              The deadline to take this assessment has passed. Submissions are no longer accepted for this exam window.
             </p>
-            <Link href="/applications">
-              <Button size="sm" variant="outline" className="text-xs mt-3">
-                Back to My Applications
-              </Button>
-            </Link>
-          </CardContent>
+          </div>
+          {assessment?.assessment_end && (
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+              Exam Deadline was: <strong>{new Date(assessment.assessment_end).toLocaleString("en-IN", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</strong>
+            </div>
+          )}
+          <Link href="/applications" className="block pt-2">
+            <Button variant="outline" className="w-full text-xs">
+              Back to My Applications
+            </Button>
+          </Link>
         </Card>
       </div>
     );

@@ -673,8 +673,26 @@ export default function DriveDetailPage() {
                         )
                       )}
 
-                      {/* Assessment block — time-gated */}
+                      {/* Assessment block — visible only once shortlisted and time-gated */}
                       {(() => {
+                        const isShortlisted = ["shortlisted", "assessment", "ai_interview", "offer", "offered", "hired"].includes(
+                          existingApp?.current_stage || ""
+                        );
+
+                        // If candidate is NOT shortlisted yet (e.g. applied or resume_screened)
+                        if (!isShortlisted) {
+                          return (
+                            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
+                              <p className="text-xs font-semibold text-slate-700 flex items-center justify-center gap-1.5">
+                                <Clock className="size-3.5 text-slate-500" /> Application Under Review
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                Resume screening is in progress. The online assessment will become available once you are shortlisted.
+                              </p>
+                            </div>
+                          );
+                        }
+
                         const winStatus = assessmentWindowBlock ?? assessmentWindowStatus(assessment);
                         if (submission) {
                           return (

@@ -96,9 +96,9 @@ def update_assessment_for_drive(
         flag_modified(assessment, "questions")
         if payload.duration_mins is not None:
             assessment.duration_mins = payload.duration_mins  # type: ignore[assignment]  # SQLAlchemy Column instrumented attr accepts int at runtime
-        if payload.assessment_start is not None:
+        if "assessment_start" in payload.model_fields_set:
             assessment.assessment_start = payload.assessment_start  # type: ignore[assignment]
-        if payload.assessment_end is not None:
+        if "assessment_end" in payload.model_fields_set:
             assessment.assessment_end = payload.assessment_end  # type: ignore[assignment]
 
     db.commit()

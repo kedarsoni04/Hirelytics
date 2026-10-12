@@ -48,6 +48,10 @@ interface Application {
   has_assessment?: boolean;
   assessment_completed?: boolean;
   assessment_score?: number | null;
+  assessment_start?: string | null;
+  assessment_end?: string | null;
+  assessment_duration_mins?: number | null;
+  is_shortlisted?: boolean;
   has_interview?: boolean;
   interview_completed?: boolean;
   interview_scheduled_at?: string | null;
@@ -161,6 +165,24 @@ function formatDate(iso?: string | null) {
     });
   } catch {
     return iso;
+  }
+}
+
+function isCandidateShortlisted(stage: string): boolean {
+  return ["shortlisted", "assessment", "ai_interview", "offer", "offered", "hired"].includes(stage);
+}
+
+function formatWindowDateTime(iso?: string | null) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(iso);
   }
 }
 
@@ -377,19 +399,68 @@ export default function ApplicationsPage() {
 
                 {/* Action */}
                 <div className="hidden md:flex items-center justify-end gap-2">
-                  {app.has_assessment && (
-                    app.assessment_completed ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 whitespace-nowrap">
-                        <CheckCircle2 className="size-3" /> Test: {Math.round(app.assessment_score ?? 0)}%
-                      </span>
-                    ) : (
-                      <Link href={`/assessment/${app.id}`}>
-                        <Button size="sm" className="h-7 px-2.5 text-xs font-semibold bg-[#4F46E5] hover:bg-[#4338CA] text-white shadow-sm gap-1 whitespace-nowrap">
-                          <FileText className="size-3" /> Take Assessment
-                        </Button>
-                      </Link>
-                    )
-                  )}
+                  {(() => {
+                    const candidateShortlisted = isCandidateShortlisted(app.current_stage) || app.is_shortlisted;
+                    if (!app.has_assessment && !candidateShortlisted) return null;
+
+                    // If drive has assessment, but candidate is not shortlisted yet
+                    if (app.has_assessment && !candidateShortlisted) {
+                      return (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 whitespace-nowrap" title="Assessment opens only after resume screening shortlist">
+                          <Clock className="size-3" /> Screening in progress
+                        </span>
+                      );
+                    }
+
+                    // Candidate is shortlisted
+                    if (candidateShortlisted && app.has_assessment) {
+                      if (app.assessment_completed) {
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 whitespace-nowrap">
+                            <CheckCircle2 className="size-3" /> Test: {Math.round(app.assessment_score ?? 0)}%
+                          </span>
+                        );
+                      }
+
+                      const nowMs = Date.now();
+                      const startMs = app.assessment_start ? new Date(app.assessment_start).getTime() : null;
+                      const endMs = app.assessment_end ? new Date(app.assessment_end).getTime() : null;
+                      const isUpcoming = startMs && nowMs < startMs;
+                      const isClosed = endMs && nowMs > endMs;
+
+                      if (isUpcoming) {
+                        return (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-800 whitespace-nowrap"
+                            title={`Opens on ${formatWindowDateTime(app.assessment_start)}`}
+                          >
+                            <Calendar className="size-3 text-amber-600" /> Exam: {formatWindowDateTime(app.assessment_start)}
+                          </span>
+                        );
+                      }
+
+                      if (isClosed) {
+                        return (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 border border-rose-200 text-rose-700 whitespace-nowrap"
+                            title={`Deadline was ${formatWindowDateTime(app.assessment_end)}`}
+                          >
+                            <XCircle className="size-3 text-rose-500" /> Exam Closed
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <Link href={`/assessment/${app.id}`}>
+                          <Button size="sm" className="h-7 px-2.5 text-xs font-semibold bg-[#4F46E5] hover:bg-[#4338CA] text-white shadow-sm gap-1 whitespace-nowrap animate-pulse">
+                            <FileText className="size-3" /> Take Assessment {app.assessment_end ? `(Ends ${formatWindowDateTime(app.assessment_end)})` : ""}
+                          </Button>
+                        </Link>
+                      );
+                    }
+
+                    return null;
+                  })()}
 
                   {app.has_interview && (
                     app.interview_completed ? (
@@ -434,21 +505,70 @@ export default function ApplicationsPage() {
                       </Link>
                     )}
                   </div>
-                  {app.has_assessment && (
-                    <div className="flex items-center justify-end">
-                      {app.assessment_completed ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700">
-                          <CheckCircle2 className="size-3" /> Test: {Math.round(app.assessment_score ?? 0)}%
-                        </span>
-                      ) : (
-                        <Link href={`/assessment/${app.id}`} className="w-full">
-                          <Button size="sm" className="w-full h-8 text-xs font-semibold bg-[#4F46E5] hover:bg-[#4338CA] text-white gap-1.5">
-                            <FileText className="size-3.5" /> Take Assessment
-                          </Button>
-                        </Link>
-                      )}
-                    </div>
-                  )}
+                  {(() => {
+                    const candidateShortlisted = isCandidateShortlisted(app.current_stage) || app.is_shortlisted;
+                    if (!app.has_assessment && !candidateShortlisted) return null;
+
+                    if (app.has_assessment && !candidateShortlisted) {
+                      return (
+                        <div className="flex items-center justify-end">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                            <Clock className="size-3" /> Screening in progress
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    if (candidateShortlisted && app.has_assessment) {
+                      if (app.assessment_completed) {
+                        return (
+                          <div className="flex items-center justify-end">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700">
+                              <CheckCircle2 className="size-3" /> Test: {Math.round(app.assessment_score ?? 0)}%
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      const nowMs = Date.now();
+                      const startMs = app.assessment_start ? new Date(app.assessment_start).getTime() : null;
+                      const endMs = app.assessment_end ? new Date(app.assessment_end).getTime() : null;
+                      const isUpcoming = startMs && nowMs < startMs;
+                      const isClosed = endMs && nowMs > endMs;
+
+                      if (isUpcoming) {
+                        return (
+                          <div className="flex items-center justify-end">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-800">
+                              <Calendar className="size-3 text-amber-600" /> Exam: {formatWindowDateTime(app.assessment_start)}
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      if (isClosed) {
+                        return (
+                          <div className="flex items-center justify-end">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 border border-rose-200 text-rose-700">
+                              <XCircle className="size-3 text-rose-500" /> Exam Closed
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="flex items-center justify-end">
+                          <Link href={`/assessment/${app.id}`} className="w-full">
+                            <Button size="sm" className="w-full h-8 text-xs font-semibold bg-[#4F46E5] hover:bg-[#4338CA] text-white gap-1.5 shadow-sm">
+                              <FileText className="size-3.5" /> Take Assessment {app.assessment_end ? `(Ends ${formatWindowDateTime(app.assessment_end)})` : ""}
+                            </Button>
+                          </Link>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })()}
                   {app.has_interview && (
                     <div className="flex items-center justify-end">
                       {app.interview_completed ? (
