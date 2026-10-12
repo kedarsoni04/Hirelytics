@@ -8,8 +8,14 @@ import time
 import uuid
 import json
 import requests
+import os
 
-BASE_URL = "https://hirelytics-gsp0.onrender.com"
+if hasattr(sys.stdout, "reconfigure"):
+    getattr(sys.stdout, "reconfigure")(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    getattr(sys.stderr, "reconfigure")(encoding="utf-8", errors="replace")
+
+BASE_URL = os.getenv("TEST_BASE_URL", "http://127.0.0.1:8000")
 
 # ─────────────────────────────────────────────────────────────────
 # Helpers
@@ -136,14 +142,18 @@ def run():
           err or (r.text if r and not ok else ""))
 
     # Step 7 — PATCH /students/me then confirm via GET /auth/me
-    patch_data = {"full_name": f"Updated Student {uid}", "skills": ["Python", "FastAPI", "SQL"]}
+    patch_data = {
+        "full_name": f"Updated Student {uid}",
+        "skills": ["Python", "FastAPI", "SQL"],
+        "resume_url": "https://res.cloudinary.com/demo/image/upload/sample.pdf",
+    }
     r, err = safe_req("patch", f"{BASE_URL}/students/me", headers=h(stud_token), json=patch_data)
     ok = r is not None and r.status_code == 200
     if ok:
         # Confirm persisted
         r2, _ = safe_req("get", f"{BASE_URL}/auth/me", headers=h(stud_token))
         sp = r2.json().get("student_profile", {}) if r2 and r2.status_code == 200 else {}
-        ok = sp.get("full_name") == patch_data["full_name"] and sp.get("skills") == patch_data["skills"]
+        ok = sp.get("full_name") == patch_data["full_name"] and sp.get("skills") == patch_data["skills"] and sp.get("resume_url") == patch_data["resume_url"]
         if not ok:
             check("PATCH /students/me + confirm persisted", False,
                   f"Persisted profile: {sp}")
@@ -407,6 +417,8 @@ def run():
     })
     fresh_stud_token = r_fresh_stud.json().get("access_token") if r_fresh_stud and r_fresh_stud.status_code == 200 else None
     if fresh_stud_token:
+        safe_req("patch", f"{BASE_URL}/students/me", headers=h(fresh_stud_token),
+                 json={"resume_url": "https://res.cloudinary.com/demo/image/upload/sample.pdf"})
         r_app2, _ = safe_req("post", f"{BASE_URL}/applications", headers=h(fresh_stud_token),
                               json={"drive_id": drive_id})
         if r_app2 and r_app2.status_code == 201:

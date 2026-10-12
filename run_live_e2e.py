@@ -11,7 +11,8 @@ import requests
 if hasattr(sys.stdout, "reconfigure"):
     getattr(sys.stdout, "reconfigure")(encoding="utf-8")
 
-BASE_URL = "https://hirelytics-gsp0.onrender.com"
+import os
+BASE_URL = os.getenv("TEST_BASE_URL", "http://127.0.0.1:8000")
 TIMEOUT = 60  # generous timeout for live backend / LLM operations
 
 results = []  # List of tuples: (step_num, status, label, detail)
@@ -146,8 +147,12 @@ def run():
         err_detail = f"Company /auth/me: {rc.status_code if rc else err_c} {rc.text if rc else ''}; Student /auth/me: {rs.status_code if rs else err_s} {rs.text if rs else ''}"
     record(6, "GET /auth/me for both — expect correct role + profile data", ok, err_detail)
 
-    # Step 7: PATCH /students/me — update full_name, skills — expect 200, confirm persisted via a follow-up GET /auth/me
-    patch_data = {"full_name": f"Updated Student {uid}", "skills": ["Python", "FastAPI", "SQL"]}
+    # Step 7: PATCH /students/me — update full_name, skills, resume — expect 200, confirm persisted via a follow-up GET /auth/me
+    patch_data = {
+        "full_name": f"Updated Student {uid}",
+        "skills": ["Python", "FastAPI", "SQL"],
+        "resume_url": "https://res.cloudinary.com/demo/image/upload/sample.pdf",
+    }
     r_patch, err_patch = safe_req("patch", f"{BASE_URL}/students/me", headers=h(stud_token), json=patch_data)
     patch_ok = r_patch is not None and r_patch.status_code == 200
     persisted_ok = False
@@ -155,7 +160,7 @@ def run():
         r_me, _ = safe_req("get", f"{BASE_URL}/auth/me", headers=h(stud_token))
         if r_me and r_me.status_code == 200:
             sp = r_me.json().get("student_profile", {})
-            persisted_ok = sp.get("full_name") == patch_data["full_name"] and sp.get("skills") == patch_data["skills"]
+            persisted_ok = sp.get("full_name") == patch_data["full_name"] and sp.get("skills") == patch_data["skills"] and sp.get("resume_url") == patch_data["resume_url"]
     ok = patch_ok and persisted_ok
     record(7, "PATCH /students/me — update full_name, skills — expect 200, confirm persisted", ok,
            err_patch or (f"Patch status: {r_patch.status_code if r_patch else 'None'}, persisted: {persisted_ok}" if not ok else ""))
@@ -420,6 +425,7 @@ def run():
     })
     if r_stud_fresh and r_stud_fresh.status_code == 200:
         fresh_token = r_stud_fresh.json()["access_token"]
+        safe_req("patch", f"{BASE_URL}/students/me", headers=h(fresh_token), json={"resume_url": "https://res.cloudinary.com/demo/image/upload/sample.pdf"})
         r_app2, _ = safe_req("post", f"{BASE_URL}/applications", headers=h(fresh_token), json={"drive_id": drive_id})
         if r_app2 and r_app2.status_code == 201:
             fresh_app_id = r_app2.json()["id"]
