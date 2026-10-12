@@ -5,19 +5,31 @@ import { AlertCircle } from "lucide-react";
 
 interface CountdownTimerProps {
   initialSeconds: number;
+  /** Called once when the timer reaches zero — use this to auto-submit */
+  onExpire?: () => void;
 }
 
-export default function CountdownTimer({ initialSeconds }: CountdownTimerProps) {
+export default function CountdownTimer({ initialSeconds, onExpire }: CountdownTimerProps) {
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const expiredRef = useRef(false);
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
-      setSecondsLeft((s) => Math.max(0, s - 1));
+      setSecondsLeft((s) => {
+        const next = Math.max(0, s - 1);
+        if (next === 0 && !expiredRef.current) {
+          expiredRef.current = true;
+          // Fire onExpire on next tick so state update is flushed first
+          setTimeout(() => onExpire?.(), 0);
+        }
+        return next;
+      });
     }, 1000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const minutes = Math.floor(secondsLeft / 60);

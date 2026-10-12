@@ -74,6 +74,9 @@ export default function AssessmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
 
+  /** Pre-exam acknowledgement gate — must accept anti-cheat rules before starting */
+  const [acknowledged, setAcknowledged] = useState(false);
+
   // ── Anti-cheat: proctoring ────────────────────────────────────────────────
   // handleForceSubmit is defined after state, so we forward-declare via ref pattern
   const forceSubmitRef = useRef<(() => void) | undefined>(undefined);
@@ -90,8 +93,8 @@ export default function AssessmentPage() {
   } = useProctor({
     maxViolations: MAX_VIOLATIONS,
     onForceSubmit: handleForceSubmit,
-    // Disable proctoring once submitted or while still loading
-    enabled: !submissionResult && !loading,
+    // Disable proctoring once submitted, while loading, or before the user acknowledges rules
+    enabled: !submissionResult && !loading && acknowledged,
   });
 
   useEffect(() => {
@@ -418,6 +421,70 @@ export default function AssessmentPage() {
     }
   }
 
+  // ── Pre-exam anti-cheat acknowledgement screen ───────────────────────────
+  if (!acknowledged) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6 bg-[#F8FAFC]">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-border/60">
+          {/* Header */}
+          <div className="px-8 py-6 bg-gradient-to-br from-[#4F46E5] to-[#7C3AED] text-white">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="size-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                <ShieldCheck className="size-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-base font-bold">Proctored Assessment</h1>
+                <p className="text-xs text-white/75">{driveTitle}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Rules */}
+          <div className="px-8 py-6 space-y-5">
+            <p className="text-sm font-semibold text-foreground">
+              Before you begin, please read the anti-cheat rules carefully:
+            </p>
+
+            <ul className="space-y-3">
+              {([
+                ["🚫", "Tab Switching", "Navigating away from this tab is recorded and counts as a violation."],
+                ["🚫", "Window Focus", "Switching to another app or window (Alt+Tab) is detected and flagged."],
+                ["🚫", "Copy / Paste", "Clipboard use (Ctrl+C / Ctrl+V) is fully blocked during the exam."],
+                ["🚫", "Right-Click", "Context menu is disabled. Browser inspect tools are not accessible."],
+                ["🚫", "DevTools", "F12, Ctrl+Shift+I, and similar shortcuts are blocked and logged."],
+                ["🚫", "Printing / Screenshots", "Ctrl+P and PrintScreen are detected and flagged."],
+                ["⚠️", "Auto-Submit", `${MAX_VIOLATIONS} violations will automatically submit your exam with current answers.`],
+                ["⏱️", "Time Limit", "Time expiry also automatically submits your exam — even if unanswered."],
+              ] as [string, string, string][]).map(([emoji, title, desc]) => (
+                <li key={title} className="flex items-start gap-3">
+                  <span className="text-base leading-none mt-0.5">{emoji}</span>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{title}</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">{desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <p className="text-[11px] text-muted-foreground border-t pt-4">
+              All violations are logged with timestamps and sent to the recruiter alongside your submission.
+            </p>
+          </div>
+
+          {/* CTA */}
+          <div className="px-8 pb-8">
+            <Button
+              className="w-full brand-gradient text-white font-bold text-sm py-3"
+              onClick={() => setAcknowledged(true)}
+            >
+              I Understand — Start Assessment
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full">
       {/* ── Anti-cheat: Proctor warning modal ── */}
@@ -465,12 +532,15 @@ export default function AssessmentPage() {
                   ? "Proctoring Active"
                   : `${violationCount}/${MAX_VIOLATIONS} Violations`}
               </span>
-            <CountdownTimer initialSeconds={(assessment.duration_mins || 30) * 60} />
+            <CountdownTimer
+              initialSeconds={(assessment.duration_mins || 30) * 60}
+              onExpire={() => handleSubmit({ force: true })}
+            />
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 p-8 max-w-4xl w-full mx-auto space-y-8">
+        <div className="flex-1 p-8 max-w-4xl w-full mx-auto space-y-8 select-none">
           {/* Question text */}
           <div className="prose prose-sm max-w-none text-foreground">
             <p className="text-lg font-medium leading-relaxed text-[#1E293B]">

@@ -7,8 +7,12 @@ import type { ProctorFlag } from "@/lib/useProctor";
 const VIOLATION_LABELS: Record<ProctorFlag["type"], string> = {
   tab_switch: "Tab Switch Detected",
   window_blur: "Window Focus Lost",
-  copy_attempt: "Copy Attempt Detected",
-  paste_attempt: "Paste Attempt Detected",
+  copy_attempt: "Copy Attempt Blocked",
+  paste_attempt: "Paste Attempt Blocked",
+  right_click: "Right-Click Blocked",
+  devtools_shortcut: "Developer Tools Blocked",
+  print_attempt: "Print Attempt Blocked",
+  screenshot_key: "Screenshot Key Detected",
 };
 
 const VIOLATION_DESCRIPTIONS: Record<ProctorFlag["type"], string> = {
@@ -17,9 +21,17 @@ const VIOLATION_DESCRIPTIONS: Record<ProctorFlag["type"], string> = {
   window_blur:
     "You switched to another application or window during the assessment.",
   copy_attempt:
-    "You attempted to copy content from the assessment page.",
+    "You attempted to copy content from the assessment. Clipboard access is disabled during proctored exams.",
   paste_attempt:
-    "You attempted to paste content into the assessment page.",
+    "You attempted to paste content into the assessment. Clipboard access is disabled during proctored exams.",
+  right_click:
+    "Right-click is disabled during proctored assessments to prevent access to browser tools.",
+  devtools_shortcut:
+    "A Developer Tools keyboard shortcut was detected and blocked. Accessing browser dev tools is not permitted.",
+  print_attempt:
+    "A print shortcut was detected and blocked. Printing the assessment content is not permitted.",
+  screenshot_key:
+    "The PrintScreen key was pressed. Screenshots of assessment content are not permitted and have been logged.",
 };
 
 type Props = {
@@ -113,8 +125,10 @@ export default function ProctorWarningModal({
                   before automatic submission.
                 </li>
                 <li>
-                  Do not switch tabs, use Alt+Tab, or copy/paste during the
-                  exam.
+                  Do not switch tabs, use Alt+Tab, or copy/paste during the exam.
+                </li>
+                <li>
+                  Right-click, DevTools (F12), and print shortcuts are disabled.
                 </li>
               </ul>
             </div>

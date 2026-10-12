@@ -1,10 +1,15 @@
 /**
  * useProctor — Anti-cheating hook for online assessments.
  *
- * Detects:
- *  - Tab visibility changes  (visibilitychange / Page Visibility API)
- *  - Window blur             (user Alt-Tabs, clicks outside the browser, etc.)
- *  - Copy / paste attempts   (optional, configurable)
+ * Detects & blocks:
+ *  - Tab visibility changes   (visibilitychange / Page Visibility API)
+ *  - Window blur              (Alt-Tab, clicks outside the browser, etc.)
+ *  - Copy / paste attempts    (configurable)
+ *  - Right-click (context menu) to prevent "inspect element"
+ *  - DevTools keyboard shortcuts (F12, Ctrl+Shift+I/J/C, Ctrl+U)
+ *  - Print shortcuts (Ctrl+P, Ctrl+Shift+P)
+ *  - PrintScreen key flag
+ *  - Text selection prevention on question content (via CSS class hint)
  *
  * Exposes:
  *  - proctorFlags     – array of timestamped flag objects to send with submission
@@ -19,7 +24,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ProctorFlag = {
-  type: "tab_switch" | "window_blur" | "copy_attempt" | "paste_attempt";
+  type:
+    | "tab_switch"
+    | "window_blur"
+    | "copy_attempt"
+    | "paste_attempt"
+    | "right_click"
+    | "devtools_shortcut"
+    | "print_attempt"
+    | "screenshot_key";
   timestamp: string; // ISO-8601
   details?: string;
 };
@@ -31,6 +44,10 @@ type UseProctorOptions = {
   onForceSubmit?: () => void;
   /** Whether to track copy/paste events. Default: true */
   trackClipboard?: boolean;
+  /** Whether to block right-click. Default: true */
+  blockContextMenu?: boolean;
+  /** Whether to block devtools keyboard shortcuts. Default: true */
+  blockDevTools?: boolean;
   /** Whether proctoring is active at all. Pass false to disable (e.g., already submitted). */
   enabled?: boolean;
 };
@@ -39,6 +56,8 @@ export function useProctor({
   maxViolations = 3,
   onForceSubmit,
   trackClipboard = true,
+  blockContextMenu = true,
+  blockDevTools = true,
   enabled = true,
 }: UseProctorOptions = {}) {
   const [proctorFlags, setProctorFlags] = useState<ProctorFlag[]>([]);
@@ -108,7 +127,8 @@ export function useProctor({
   useEffect(() => {
     if (!enabled || !trackClipboard) return;
 
-    const handleCopy = () => {
+    const handleCopy = (e: Event) => {
+      e.preventDefault();
       addFlag({
         type: "copy_attempt",
         timestamp: new Date().toISOString(),
@@ -116,7 +136,8 @@ export function useProctor({
       });
     };
 
-    const handlePaste = () => {
+    const handlePaste = (e: Event) => {
+      e.preventDefault();
       addFlag({
         type: "paste_attempt",
         timestamp: new Date().toISOString(),
@@ -131,6 +152,97 @@ export function useProctor({
       document.removeEventListener("paste", handlePaste);
     };
   }, [enabled, trackClipboard, addFlag]);
+
+  // ── Right-click (context menu) ────────────────────────────────────────────
+  useEffect(() => {
+    if (!enabled || !blockContextMenu) return;
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      addFlag({
+        type: "right_click",
+        timestamp: new Date().toISOString(),
+        details: "Candidate attempted to open the right-click context menu.",
+      });
+    };
+
+    document.addEventListener("contextmenu", handleContextMenu);
+    return () => document.removeEventListener("contextmenu", handleContextMenu);
+  }, [enabled, blockContextMenu, addFlag]);
+
+  // ── DevTools / Print shortcuts ────────────────────────────────────────────
+  useEffect(() => {
+    if (!enabled || !blockDevTools) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey;
+      const shift = e.shiftKey;
+
+      // F12 — DevTools toggle
+      if (e.key === "F12") {
+        e.preventDefault();
+        addFlag({
+          type: "devtools_shortcut",
+          timestamp: new Date().toISOString(),
+          details: `Blocked key: F12 (DevTools).`,
+        });
+        return;
+      }
+
+      // Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C — DevTools
+      if (ctrl && shift && ["i", "I", "j", "J", "c", "C"].includes(e.key)) {
+        e.preventDefault();
+        addFlag({
+          type: "devtools_shortcut",
+          timestamp: new Date().toISOString(),
+          details: `Blocked key: Ctrl+Shift+${e.key.toUpperCase()} (DevTools).`,
+        });
+        return;
+      }
+
+      // Ctrl+U — View Source
+      if (ctrl && (e.key === "u" || e.key === "U")) {
+        e.preventDefault();
+        addFlag({
+          type: "devtools_shortcut",
+          timestamp: new Date().toISOString(),
+          details: "Blocked key: Ctrl+U (View Source).",
+        });
+        return;
+      }
+
+      // Ctrl+P — Print
+      if (ctrl && !shift && (e.key === "p" || e.key === "P")) {
+        e.preventDefault();
+        addFlag({
+          type: "print_attempt",
+          timestamp: new Date().toISOString(),
+          details: "Blocked key: Ctrl+P (Print).",
+        });
+        return;
+      }
+
+      // PrintScreen
+      if (e.key === "PrintScreen") {
+        // Can't fully block, but flag it
+        addFlag({
+          type: "screenshot_key",
+          timestamp: new Date().toISOString(),
+          details: "PrintScreen key pressed during assessment.",
+        });
+        return;
+      }
+
+      // Ctrl+A — Select All (silent block, no flag — UX friendly)
+      if (ctrl && (e.key === "a" || e.key === "A")) {
+        e.preventDefault();
+        return;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [enabled, blockDevTools, addFlag]);
 
   return {
     proctorFlags,
