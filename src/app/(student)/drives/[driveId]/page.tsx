@@ -558,20 +558,25 @@ export default function DriveDetailPage() {
     try {
       setRespondingOffer(true);
       setOfferError(null);
-      await api.respondToOffer(existingApp.id, response);
-      setExistingApp((prev) =>
-        prev
-          ? {
-              ...prev,
-              offer_status: response,
-              current_stage: response === "accepted" ? "offered" : prev.current_stage,
-            }
-          : prev
-      );
+      const updated = await api.respondToOffer(existingApp.id, response);
+      // Use the server-returned state to keep everything in sync
+      if (updated) {
+        setExistingApp((prev) => prev ? { ...prev, ...updated } : prev);
+      } else {
+        setExistingApp((prev) =>
+          prev
+            ? {
+                ...prev,
+                offer_status: response,
+                // current_stage stays as 'offered' — recruiter decides final hire
+              }
+            : prev
+        );
+      }
       dispatchNotificationsUpdated();
       dispatchApplicationsUpdated();
     } catch (err: unknown) {
-      setOfferError(err instanceof Error ? err.message : "Failed to respond to offer");
+      setOfferError(err instanceof Error ? err.message : "Failed to respond to offer. Please try again.");
     } finally {
       setRespondingOffer(false);
     }

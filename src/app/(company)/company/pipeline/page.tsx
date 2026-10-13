@@ -162,6 +162,9 @@ export default function PipelinePage() {
           return stage === "ai_interview" || stage === "assessment" || stage === "hr_round";
         }
         if (stageId === "offered") {
+          // Show candidates in 'offered' stage regardless of offer_status
+          // Accepted candidates stay here until recruiter formally hires them
+          // Rejected candidates stay here so recruiter can re-extend or remove
           return stage === "offered" || stage === "offer";
         }
         if (stageId === "hired") {
@@ -358,15 +361,39 @@ export default function PipelinePage() {
                             {stage.id === "offered" && (
                               <>
                                 {app.offer_status === "rejected" ? (
+                                  // Candidate rejected — recruiter can re-extend or remove
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      disabled={isUpdating}
+                                      onClick={() => handleGenerateOffer(app)}
+                                      className="flex-1 h-8 text-xs brand-gradient text-white font-semibold gap-1"
+                                    >
+                                      {isUpdating ? <Loader2 className="size-3 animate-spin" /> : <FileText className="size-3" />}
+                                      Re-extend Offer
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      disabled={isUpdating}
+                                      onClick={() => handleRemoveCandidate(app.id)}
+                                      className="flex-1 h-8 text-xs bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 gap-1 font-semibold"
+                                    >
+                                      <UserMinus className="size-3" /> Remove
+                                    </Button>
+                                  </>
+                                ) : app.offer_status === "accepted" ? (
+                                  // Candidate accepted — recruiter should now formally hire
                                   <Button
                                     size="sm"
                                     disabled={isUpdating}
-                                    onClick={() => handleRemoveCandidate(app.id)}
-                                    className="flex-1 h-8 text-xs bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 gap-1 font-semibold"
+                                    onClick={() => moveCandidate(app.id, "hired")}
+                                    className="flex-1 h-8 text-xs bg-emerald-600 text-white hover:bg-emerald-700 font-bold gap-1"
                                   >
-                                    <UserMinus className="size-3" /> Remove from Process
+                                    {isUpdating ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                                    Confirm Hire
                                   </Button>
                                 ) : (
+                                  // Offer pending candidate response
                                   <>
                                     <Button
                                       size="sm"
