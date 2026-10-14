@@ -1,7 +1,7 @@
-\"use client\";
+"use client";
 
-import { useState, useEffect } from \"react\";
-import { useRouter } from \"next/navigation\";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   Sparkles,
@@ -14,45 +14,44 @@ import {
   ArrowRight,
   UserCheck,
   ClipboardCheck,
-} from \"lucide-react\";
-import { Button } from \"@/components/ui/button\";
-import { Card, CardContent } from \"@/components/ui/card\";
-import { Separator } from \"@/components/ui/separator\";
-import { api } from \"@/lib/api\";
-import { formatDistanceToNow, isToday, parseISO } from \"date-fns\";
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { api } from "@/lib/api";
+import { formatDistanceToNow, isToday, parseISO } from "date-fns";
 
 // ── Icon + color config per notification type ─────────────────────────────────
 
 const notifConfig: Record<string, { icon: React.ElementType; bg: string; color: string; label: string }> = {
-  ai_result_ready:    { icon: Sparkles,       bg: \"#EDE9FE\", color: \"#5B21B6\", label: \"AI Update\" },
-  interview:          { icon: Calendar,       bg: \"#DBEAFE\", color: \"#1E40AF\", label: \"Interview\" },
-  interview_scheduled:{ icon: Calendar,       bg: \"#DBEAFE\", color: \"#1E40AF\", label: \"Interview\" },
-  application_update: { icon: Send,           bg: \"#EEF2FF\", color: \"#3730A3\", label: \"Application\" },
-  offer:              { icon: Trophy,         bg: \"#D1FAE5\", color: \"#065F46\", label: \"Offer\" },
-  hired:              { icon: UserCheck,      bg: \"#D1FAE5\", color: \"#065F46\", label: \"Hired\" },
-  shortlisted:        { icon: Trophy,         bg: \"#FEF9C3\", color: \"#854D0E\", label: \"Shortlisted\" },
-  assessment:         { icon: ClipboardCheck, bg: \"#FEF3C7\", color: \"#92400E\", label: \"Assessment\" },
-  system:             { icon: Settings,       bg: \"#F1F5F9\", color: \"#475569\", label: \"System\" },
+  ai_result_ready:    { icon: Sparkles,       bg: "#EDE9FE", color: "#5B21B6", label: "AI Update" },
+  interview:          { icon: Calendar,       bg: "#DBEAFE", color: "#1E40AF", label: "Interview" },
+  interview_scheduled:{ icon: Calendar,       bg: "#DBEAFE", color: "#1E40AF", label: "Interview" },
+  application_update: { icon: Send,           bg: "#EEF2FF", color: "#3730A3", label: "Application" },
+  offer:              { icon: Trophy,         bg: "#D1FAE5", color: "#065F46", label: "Offer" },
+  hired:              { icon: UserCheck,      bg: "#D1FAE5", color: "#065F46", label: "Hired" },
+  shortlisted:        { icon: Trophy,         bg: "#FEF9C3", color: "#854D0E", label: "Shortlisted" },
+  assessment:         { icon: ClipboardCheck, bg: "#FEF3C7", color: "#92400E", label: "Assessment" },
+  system:             { icon: Settings,       bg: "#F1F5F9", color: "#475569", label: "System" },
 };
 
 // ── Map notification type → destination route (company) ──────────────────────
 function getNotificationUrl(type: string): string {
   switch (type) {
-    case \"interview\":
-    case \"interview_scheduled\":
-    case \"ai_result_ready\":
-      // Company wants to review candidates
-      return \"/company/pipeline\";
-    case \"application_update\":
-    case \"shortlisted\":
-      return \"/company/pipeline\";
-    case \"offer\":
-    case \"hired\":
-      return \"/company/pipeline\";
-    case \"assessment\":
-      return \"/company/pipeline\";
+    case "interview":
+    case "interview_scheduled":
+    case "ai_result_ready":
+      return "/company/pipeline";
+    case "application_update":
+    case "shortlisted":
+      return "/company/pipeline";
+    case "offer":
+    case "hired":
+      return "/company/pipeline";
+    case "assessment":
+      return "/company/pipeline";
     default:
-      return \"/company/pipeline\";
+      return "/company/pipeline";
   }
 }
 
@@ -83,8 +82,8 @@ export default function CompanyNotificationsPage() {
 
   useEffect(() => {
     fetchNotifications();
-    window.addEventListener(\"notifications-updated\", fetchNotifications);
-    return () => window.removeEventListener(\"notifications-updated\", fetchNotifications);
+    window.addEventListener("notifications-updated", fetchNotifications);
+    return () => window.removeEventListener("notifications-updated", fetchNotifications);
   }, []);
 
   const unreadCount = items.filter((n) => !n.is_read).length;
@@ -93,7 +92,7 @@ export default function CompanyNotificationsPage() {
     try {
       await api.markAllNotificationsRead();
       setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      window.dispatchEvent(new Event(\"notifications-updated\"));
+      window.dispatchEvent(new Event("notifications-updated"));
     } catch (error) {
       console.error(error);
     }
@@ -104,7 +103,7 @@ export default function CompanyNotificationsPage() {
       try {
         await api.markNotificationRead(notif.id);
         setItems((prev) => prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n)));
-        window.dispatchEvent(new Event(\"notifications-updated\"));
+        window.dispatchEvent(new Event("notifications-updated"));
       } catch {
         // best-effort
       }
@@ -114,42 +113,42 @@ export default function CompanyNotificationsPage() {
 
   // Group notifications
   const groupedItems = items.reduce((acc, item) => {
-    const group = isToday(parseISO(item.created_at)) ? \"Today\" : \"Earlier\";
+    const group = isToday(parseISO(item.created_at)) ? "Today" : "Earlier";
     if (!acc[group]) acc[group] = [];
     acc[group].push(item);
     return acc;
   }, {} as Record<string, CompanyNotification[]>);
 
-  const groups = [\"Today\", \"Earlier\"];
+  const groups = ["Today", "Earlier"];
 
   if (loading) {
     return (
-      <div className=\"flex h-40 items-center justify-center\">
-        <Loader2 className=\"size-6 animate-spin text-muted-foreground\" />
+      <div className="flex h-40 items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className=\"p-6 max-w-3xl mx-auto space-y-6\">
+    <div className="p-6 max-w-3xl mx-auto space-y-6">
       {/* Header */}
-      <div className=\"flex items-center justify-between\">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className=\"text-2xl font-bold text-foreground\">Notifications</h1>
-          <p className=\"text-sm text-muted-foreground mt-0.5\">
+          <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             {unreadCount > 0
-              ? `${unreadCount} unread notification${unreadCount > 1 ? \"s\" : \"\"}`
-              : \"All caught up!\"}
+              ? `${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`
+              : "All caught up!"}
           </p>
         </div>
         {unreadCount > 0 && (
           <Button
-            variant=\"outline\"
-            size=\"sm\"
+            variant="outline"
+            size="sm"
             onClick={markAllRead}
-            className=\"gap-2 text-xs\"
+            className="gap-2 text-xs"
           >
-            <CheckCheck className=\"size-3.5\" /> Mark all as read
+            <CheckCheck className="size-3.5" /> Mark all as read
           </Button>
         )}
       </div>
@@ -160,13 +159,13 @@ export default function CompanyNotificationsPage() {
         if (!groupItems || groupItems.length === 0) return null;
 
         return (
-          <section key={group} className=\"space-y-2\">
-            <p className=\"text-xs tracking-tight font-bold uppercase tracking-widest text-muted-foreground px-1\">
+          <section key={group} className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">
               {group}
             </p>
 
-            <Card className=\"card-shadow border-border/60 overflow-hidden\">
-              <CardContent className=\"p-0\">
+            <Card className="card-shadow border-border/60 overflow-hidden">
+              <CardContent className="p-0">
                 {groupItems.map((notif: CompanyNotification, i: number) => {
                   const cfg = notifConfig[notif.type] || notifConfig.system;
                   const Icon = cfg.icon;
@@ -176,64 +175,64 @@ export default function CompanyNotificationsPage() {
                     <div key={notif.id}>
                       {i > 0 && <Separator />}
                       <button
-                        type=\"button\"
+                        type="button"
                         onClick={() => handleNotifClick(notif)}
                         className={`w-full text-left flex items-start gap-4 px-5 py-4 transition-colors group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                           !notif.is_read
-                            ? \"bg-[#EEF2FF]/50 hover:bg-[#EEF2FF]/80 cursor-pointer\"
-                            : \"hover:bg-muted/30 cursor-pointer\"
+                            ? "bg-[#EEF2FF]/50 hover:bg-[#EEF2FF]/80 cursor-pointer"
+                            : "hover:bg-muted/30 cursor-pointer"
                         }`}
                       >
                         {/* Unread dot */}
                         {!notif.is_read && (
-                          <span className=\"absolute left-2 top-1/2 -translate-y-1/2 size-1.5 rounded-full bg-[#4F46E5]\" />
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 size-1.5 rounded-full bg-[#4F46E5]" />
                         )}
 
                         {/* Icon */}
                         <div
-                          className=\"size-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5\"
+                          className="size-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
                           style={{ backgroundColor: cfg.bg }}
                         >
                           <Icon
-                            className=\"size-4\"
+                            className="size-4"
                             style={{ color: cfg.color }}
                           />
                         </div>
 
                         {/* Content */}
-                        <div className=\"flex-1 min-w-0\">
-                          <div className=\"flex items-start justify-between gap-2\">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
                             <p
                               className={`text-sm leading-snug ${
                                 !notif.is_read
-                                  ? \"font-semibold text-foreground\"
-                                  : \"font-medium text-foreground\"
+                                  ? "font-semibold text-foreground"
+                                  : "font-medium text-foreground"
                               }`}
                             >
                               {cfg.label} Update
                             </p>
-                            <div className=\"flex items-center gap-1 shrink-0\">
-                              <span className=\"text-xs tracking-tight text-muted-foreground whitespace-nowrap\">
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-xs tracking-tight text-muted-foreground whitespace-nowrap">
                                 {formatDistanceToNow(parseISO(notif.created_at), { addSuffix: true })}
                               </span>
                             </div>
                           </div>
-                          <p className=\"text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2\">
+                          <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">
                             {notif.message}
                           </p>
 
                           {/* Destination hint */}
-                          <span className=\"inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-indigo-600 group-hover:text-indigo-800 transition-colors\">
-                            <ArrowRight className=\"size-3\" />
-                            {destUrl.includes(\"pipeline\") ? \"View Pipeline\" : \"Go to page\"}
+                          <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-indigo-600 group-hover:text-indigo-800 transition-colors">
+                            <ArrowRight className="size-3" />
+                            {destUrl.includes("pipeline") ? "View Pipeline" : "Go to page"}
                           </span>
 
                           {/* Type badge */}
                           <span
-                            className=\"inline-flex items-center gap-1 ml-2 mt-2 px-1.5 py-0.5 rounded text-xs tracking-tight font-medium\"
+                            className="inline-flex items-center gap-1 ml-2 mt-2 px-1.5 py-0.5 rounded text-xs tracking-tight font-medium"
                             style={{ backgroundColor: cfg.bg, color: cfg.color }}
                           >
-                            <Icon className=\"size-2.5\" />
+                            <Icon className="size-2.5" />
                             {cfg.label}
                           </span>
                         </div>
@@ -248,12 +247,12 @@ export default function CompanyNotificationsPage() {
       })}
 
       {items.length === 0 && (
-        <div className=\"flex flex-col items-center justify-center py-20 text-center\">
-          <div className=\"size-14 rounded-2xl bg-muted flex items-center justify-center mb-4\">
-            <Bell className=\"size-7 text-muted-foreground\" />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="size-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+            <Bell className="size-7 text-muted-foreground" />
           </div>
-          <p className=\"text-sm font-medium text-foreground\">No notifications</p>
-          <p className=\"text-xs text-muted-foreground mt-1\">
+          <p className="text-sm font-medium text-foreground">No notifications</p>
+          <p className="text-xs text-muted-foreground mt-1">
             You&apos;re all caught up.
           </p>
         </div>

@@ -577,6 +577,23 @@ export default function InterviewPage() {
     }
   };
 
+  // ── Wire force-submit ref for useProctor ──────────────────────────────────
+  // We define this AFTER handleSubmitAnswer is declared above, so it's always fresh
+  useEffect(() => {
+    forceSubmitRef.current = () => {
+      if (!submitting && !isCompleted && interview) {
+        // Force-complete: stop recording if active, then complete the interview
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+          try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
+        }
+        api.completeInterview(interview.id).then(() => {
+          dispatchNotificationsUpdated();
+          setIsCompleted(true);
+        }).catch(console.error);
+      }
+    };
+  }, [submitting, isCompleted, interview]);
+
   // ── Loading state ──
   if (loading) {
     return (
@@ -758,23 +775,6 @@ export default function InterviewPage() {
       </div>
     );
   }
-
-  // ── Wire force-submit ref for useProctor ──────────────────────────────────
-  // We define this AFTER handleSubmitAnswer is declared above, so it's always fresh
-  useEffect(() => {
-    forceSubmitRef.current = () => {
-      if (!submitting && !isCompleted && interview) {
-        // Force-complete: stop recording if active, then complete the interview
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-          try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
-        }
-        api.completeInterview(interview.id).then(() => {
-          dispatchNotificationsUpdated();
-          setIsCompleted(true);
-        }).catch(console.error);
-      }
-    };
-  }, [submitting, isCompleted, interview]);
 
   // ── Active Interview Question Screen ──
   const isTechnical = isTechnicalOrCoding(currentQ || undefined);
