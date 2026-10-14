@@ -31,6 +31,8 @@ import CameraBox from "@/components/interview/CameraBox";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { dispatchNotificationsUpdated } from "@/lib/use-unread-count";
+import { useProctor } from "@/lib/useProctor";
+import ProctorWarningModal from "@/components/assessment/ProctorWarningModal";
 
 type InterviewQuestion = {
   id?: string | number;
@@ -101,6 +103,8 @@ function formatMinutesSeconds(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+const MAX_PROCTOR_VIOLATIONS = 3;
+
 export default function InterviewPage() {
   const params = useParams();
   const applicationId = params?.id as string;
@@ -146,6 +150,27 @@ export default function InterviewPage() {
 
   // Integrity event logging (tab switches, focus loss, fullscreen exit, camera disable)
   const integrityEventsRef = useRef<IntegrityEvent[]>([]);
+
+  // ── useProctor Anti-Cheating ──────────────────────────────────────────────
+  // Ref so the force-submit callback can always reach the latest handleSubmitAnswer
+  const forceSubmitRef = useRef<(() => void) | null>(null);
+
+  const {
+    proctorFlags,
+    violationCount,
+    showWarning,
+    lastViolation,
+    dismissWarning,
+  } = useProctor({
+    maxViolations: MAX_PROCTOR_VIOLATIONS,
+    enabled: hasConsented && !isCompleted,
+    trackClipboard: true,
+    blockContextMenu: true,
+    blockDevTools: true,
+    onForceSubmit: () => {
+      if (forceSubmitRef.current) forceSubmitRef.current();
+    },
+  });
 
   // Refs for media recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -505,9 +530,14 @@ export default function InterviewPage() {
       }
 
       formData.append("response_latency_ms", String(currentLatencyMsRef.current || 0));
-      formData.append("integrity_events", JSON.stringify(integrityEventsRef.current));
+      // Merge per-question integrity events with proctor flags collected so far
+      const combinedEvents = [
+        ...integrityEventsRef.current,
+        ...proctorFlags.map((f) => ({ type: f.type, timestamp: f.timestamp, details: f.details })),
+      ];
+      formData.append("integrity_events", JSON.stringify(combinedEvents));
 
-      // Reset integrity events collected for this question
+      // Reset per-question integrity events
       integrityEventsRef.current = [];
 
       // Call /interviews/{id}/answer
@@ -519,6 +549,8 @@ export default function InterviewPage() {
         await api.completeInterview(interview.id);
         dispatchNotificationsUpdated();
         setIsCompleted(true);
+        // Stop proctoring once completed
+        // (useProctor enabled=false when isCompleted is set)
       } else {
         // Next question received dynamically
         const nextQ = normalizeQuestion(res.next_question, mainQuestionNumber);
@@ -727,6 +759,23 @@ export default function InterviewPage() {
     );
   }
 
+  // ── Wire force-submit ref for useProctor ──────────────────────────────────
+  // We define this AFTER handleSubmitAnswer is declared above, so it's always fresh
+  useEffect(() => {
+    forceSubmitRef.current = () => {
+      if (!submitting && !isCompleted && interview) {
+        // Force-complete: stop recording if active, then complete the interview
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+          try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
+        }
+        api.completeInterview(interview.id).then(() => {
+          dispatchNotificationsUpdated();
+          setIsCompleted(true);
+        }).catch(console.error);
+      }
+    };
+  }, [submitting, isCompleted, interview]);
+
   // ── Active Interview Question Screen ──
   const isTechnical = isTechnicalOrCoding(currentQ || undefined);
   const maxQuestionTime = getQuestionDuration(currentQ || undefined);
@@ -735,6 +784,16 @@ export default function InterviewPage() {
 
   return (
     <div className="flex flex-col h-full bg-[#F8FAFC]">
+      {/* ── Anti-Cheating: Proctor Warning Modal ── */}
+      {showWarning && (
+        <ProctorWarningModal
+          violationCount={violationCount}
+          maxViolations={MAX_PROCTOR_VIOLATIONS}
+          lastViolation={lastViolation}
+          onDismiss={dismissWarning}
+          forceSubmitting={violationCount >= MAX_PROCTOR_VIOLATIONS}
+        />
+      )}
       {/* Top Bar */}
       <div className="h-14 border-b border-border bg-white px-6 md:px-8 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
@@ -764,8 +823,18 @@ export default function InterviewPage() {
             </span>
           </div>
 
-          <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
-            <ShieldCheck className="size-3.5" /> Proctor Active
+          <span
+            className={`hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md border ${
+              violationCount > 0
+                ? "text-amber-700 bg-amber-50 border-amber-200"
+                : "text-emerald-600 bg-emerald-50 border-emerald-100"
+            }`}
+          >
+            {violationCount > 0 ? (
+              <><ShieldAlert className="size-3.5" /> {violationCount} Violation{violationCount > 1 ? "s" : ""} Flagged</>
+            ) : (
+              <><ShieldCheck className="size-3.5" /> Proctor Active</>
+            )}
           </span>
 
           {/* Progress counts main questions only */}

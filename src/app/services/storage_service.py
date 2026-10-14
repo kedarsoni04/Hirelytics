@@ -63,7 +63,20 @@ def upload_offer_letter(file_bytes: bytes, application_id: str) -> str:
                 overwrite=True,
                 invalidate=True,
             )
-            return result["secure_url"]
+            raw_url: str = result["secure_url"]
+            # Insert fl_attachment so Cloudinary adds Content-Disposition: attachment
+            # and the browser downloads it as a PDF rather than failing to open raw bytes.
+            # For raw resources the URL looks like:
+            #   https://res.cloudinary.com/<cloud>/raw/upload/<public_id>
+            # We inject the transformation before the version/public_id segment.
+            if "/raw/upload/" in raw_url:
+                pdf_url = raw_url.replace(
+                    "/raw/upload/",
+                    "/raw/upload/fl_attachment:Offer_Letter/"
+                )
+            else:
+                pdf_url = raw_url
+            return pdf_url
     except Exception as e:
         print(f"[Storage] Cloudinary offer letter upload failed: {e}. Storing locally.")
 

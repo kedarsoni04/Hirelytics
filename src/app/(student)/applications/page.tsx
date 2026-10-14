@@ -587,7 +587,7 @@ export default function ApplicationsPage() {
                         <UserCheck className="size-3" /> Hired ✓
                       </span>
                       {app.offer_letter_url && (
-                        <a href={app.offer_letter_url} target="_blank" rel="noopener noreferrer">
+                        <a href={app.offer_letter_url} download="Offer_Letter.pdf" rel="noopener noreferrer">
                           <Button size="sm" className="h-7 px-2.5 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white gap-1 shadow-sm">
                             <Download className="size-3" /> Offer Letter
                           </Button>
@@ -661,7 +661,7 @@ export default function ApplicationsPage() {
                   )}
 
                   {app.current_stage === "hired" && app.offer_letter_url && (
-                    <a href={app.offer_letter_url} target="_blank" rel="noopener noreferrer">
+                    <a href={app.offer_letter_url} download="Offer_Letter.pdf" rel="noopener noreferrer">
                       <Button size="sm" className="w-full h-8 text-xs font-bold bg-teal-600 text-white gap-1.5">
                         <Download className="size-3.5" /> Download Official Offer Letter
                       </Button>

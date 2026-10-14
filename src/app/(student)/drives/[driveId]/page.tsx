@@ -1083,7 +1083,7 @@ export default function DriveDetailPage() {
                               {(existingApp?.offer_letter_url as string | undefined) && (
                                 <a
                                   href={existingApp!.offer_letter_url as string}
-                                  target="_blank"
+                                  download="Offer_Letter.pdf"
                                   rel="noopener noreferrer"
                                   className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs"
                                 >

@@ -560,7 +560,7 @@ export default function CandidateScorecardPage() {
                   {application.offer_letter_url && (
                     <a
                       href={application.offer_letter_url}
-                      target="_blank"
+                      download="Offer_Letter.pdf"
                       rel="noopener noreferrer"
                       className="block"
                     >
