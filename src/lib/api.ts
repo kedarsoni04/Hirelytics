@@ -123,6 +123,10 @@ export const api = {
     fetchAPI('/interviews', { method: 'POST', body: JSON.stringify(data) }),
   submitInterview: (interviewId: string, data: { transcript: string; proctor_flags?: unknown[] }) =>
     fetchAPI(`/interviews/${interviewId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
+  answerInterview: (interviewId: string, formData: FormData) =>
+    fetchAPI(`/interviews/${interviewId}/answer`, { method: 'POST', body: formData }),
+  completeInterview: (interviewId: string) =>
+    fetchAPI(`/interviews/${interviewId}/complete`, { method: 'POST' }),
   getCompanyScheduledInterviews: () => fetchAPI('/interviews/company/scheduled', { method: 'GET' }),
   scheduleInterview: (data: { application_id: string; scheduled_at: string; notes?: string }) =>
     fetchAPI('/interviews/schedule', { method: 'POST', body: JSON.stringify(data) }),
@@ -157,3 +161,8 @@ export const api = {
   getAdminDashboardStats: () => fetchAPI('/admin/dashboard/stats', { method: 'GET' }),
   getAdminAnalytics: () => fetchAPI('/admin/analytics', { method: 'GET' }),
 };
+
+export const answerInterview = (interviewId: string, formData: FormData) =>
+  api.answerInterview(interviewId, formData);
+export const completeInterview = (interviewId: string) =>
+  api.completeInterview(interviewId);

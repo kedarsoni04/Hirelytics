@@ -249,6 +249,8 @@ class InterviewOut(BaseModel):
     id: str
     application_id: str
     questions: List[Any] = []
+    answers: Optional[List[Any]] = []
+    integrity_flags: Optional[Dict[str, Any]] = {}
     transcript: Optional[str] = None
     video_url: Optional[str] = None
     sentiment_data: Optional[Dict[str, Any]] = None

@@ -29,6 +29,9 @@ import {
   HelpCircle,
   Timer,
   Clock,
+  ChevronDown,
+  ChevronUp,
+  Quote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -157,13 +160,58 @@ type SubmissionData = {
   [key: string]: unknown;
 };
 
+type InterviewAnswer = {
+  question_id?: string | number;
+  category?: string;
+  transcript?: string;
+  is_follow_up?: boolean;
+  delivery_metrics?: {
+    wpm?: number;
+    longest_pause_sec?: number;
+    filler_count?: number;
+    filler_words_approx?: number;
+    word_count?: number;
+    duration_sec?: number;
+    response_latency_ms?: number;
+  };
+  evaluation?: {
+    rubric_score?: number;
+    communication_score?: number;
+    key_points_covered?: string[];
+    key_points_missed?: string[];
+    evidence_quote?: string;
+    follow_up_question?: string | null;
+    needs_follow_up?: boolean;
+    skills_demonstrated?: string[];
+    skills_missing?: string[];
+  };
+  integrity_events?: { type?: string; timestamp?: string }[];
+};
+
 type InterviewDetails = {
   id?: string;
   application_id?: string;
-  questions?: (string | { question?: string; text?: string; category?: string })[];
+  questions?: (string | { id?: string | number; question?: string; text?: string; category?: string; is_follow_up?: boolean; parent_id?: string | number | null })[];
+  answers?: InterviewAnswer[];
+  integrity_flags?: {
+    tab_switches?: number;
+    focus_losses?: number;
+    fullscreen_exits?: number;
+    total_events?: number;
+  };
   transcript?: string;
   proctor_flags?: { type?: string; timestamp?: string; details?: string }[];
-  sentiment_data?: Record<string, unknown>;
+  sentiment_data?: {
+    skills_demonstrated?: string[];
+    skills_missing?: string[];
+    skills_expected?: string[];
+    confidence_score?: number;
+    technical_score?: number;
+    filler_word_count?: number;
+    tone?: string;
+    keyword_matches?: string[];
+    [key: string]: unknown;
+  };
   completed_at?: string | null;
   scheduled_at?: string | null;
   [key: string]: unknown;
@@ -217,6 +265,14 @@ export default function CandidateScorecardPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionMessageType, setActionMessageType] = useState<"error" | "success">("error");
   const [interviewSuccessMsg, setInterviewSuccessMsg] = useState<string | null>(null);
+  const [expandedTranscripts, setExpandedTranscripts] = useState<Record<string | number, boolean>>({});
+
+  const toggleTranscript = (idx: string | number) => {
+    setExpandedTranscripts((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
+  };
 
   const loadData = async () => {
     if (!candidateId) return;
@@ -852,71 +908,6 @@ export default function CandidateScorecardPage() {
         return null;
       })()}
 
-      {/* ── AI Interview Questions & Respective Candidate Answers (Requirement 3) ── */}
-      {interview && (interview.questions || interview.transcript) && (
-        <Card className="card-shadow border-border/60">
-          <CardContent className="p-6">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <div className="flex items-center gap-2">
-                <Video className="size-4 text-[#7C3AED]" />
-                <h3 className="text-sm font-bold text-foreground">AI Interview Questions & Candidate Responses</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                {interview.completed_at ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <CheckCircle2 className="size-3" /> Completed {formatDateTime(interview.completed_at)}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                    <Clock className="size-3" /> Scheduled / In Progress
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Questions & Respective Answers List */}
-            {(() => {
-              const qaList = parseInterviewQA(interview.questions, interview.transcript);
-              if (qaList.length === 0) {
-                return (
-                  <div className="p-6 text-center text-xs text-muted-foreground bg-muted/20 rounded-xl">
-                    Interview scheduled. Questions and candidate responses will appear here after the candidate completes their AI interview.
-                  </div>
-                );
-              }
-
-              return (
-                <div className="space-y-4">
-                  {qaList.map((qa, idx) => (
-                    <div key={idx} className="p-4 rounded-xl border border-border/80 bg-slate-50/60 space-y-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-100 text-indigo-800">
-                          Question {qa.index}
-                        </span>
-                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-white px-2 py-0.5 rounded border">
-                          {qa.category ? qa.category.replace(/_/g, " ") : (idx % 2 === 0 ? "Technical / Coding" : "Descriptive")}
-                        </span>
-                      </div>
-                      <p className="text-sm font-semibold text-gray-900 leading-snug">
-                        {qa.question}
-                      </p>
-                      <div className="p-3 rounded-lg bg-white border border-gray-200/80 text-xs text-gray-700 space-y-1">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                          <MessageSquare className="size-3 text-indigo-500" /> Candidate Response:
-                        </p>
-                        <p className="leading-relaxed whitespace-pre-wrap font-sans">
-                          {qa.answer}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </CardContent>
-        </Card>
-      )}
-
       {/* ── Main AI Content Grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Overall Score & Insights */}
@@ -1108,6 +1099,350 @@ export default function CandidateScorecardPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* ── Interview Evidence Section (Under 4 Pillar Cards) ── */}
+          <Card className="card-shadow border-border/60">
+            <CardContent className="p-6 space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-4">
+                <div className="flex items-center gap-2">
+                  <Video className="size-5 text-[#7C3AED]" />
+                  <div>
+                    <h3 className="text-base font-bold text-foreground">Interview Evidence</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Structured AI evaluation, rubric scoring, delivery metrics, and session signals.
+                    </p>
+                  </div>
+                </div>
+                {interview?.completed_at ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle2 className="size-3.5" /> Completed {formatDateTime(interview.completed_at)}
+                  </span>
+                ) : interviewExists ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                    <Clock className="size-3.5" /> Scheduled / In Progress
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Guard for null or pending interview data */}
+              {!interview || (!interview.answers?.length && !interview.transcript) ? (
+                <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2">
+                  <Bot className="size-8 text-muted-foreground mx-auto" />
+                  <p className="text-xs font-medium text-foreground">No interview evaluation available yet</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Candidate has not completed their AI interview. Responses, rubrics, and delivery signals will display here upon completion.
+                  </p>
+                </div>
+              ) : !interview.answers || interview.answers.length === 0 ? (
+                /* Guard for Legacy Interview without rubric fields */
+                <div className="space-y-4">
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                    <span className="font-bold">Legacy Interview Record:</span> Detailed rubric scoring and per-question delivery metrics were not recorded for this earlier session.
+                  </div>
+                  <div className="p-4 rounded-xl border bg-slate-50 space-y-2">
+                    <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">Candidate Transcript</p>
+                    <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                      {interview.transcript || "No transcript recorded."}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* Full Structured Interview Evidence */
+                <div className="space-y-6">
+                  {/* Integrity Panel */}
+                  {(() => {
+                    const flags = interview.integrity_flags || {};
+                    let tabSwitches = Number(flags.tab_switches || 0);
+                    let focusLosses = Number(flags.focus_losses || 0);
+                    let fullscreenExits = Number(flags.fullscreen_exits || 0);
+
+                    // Check answer-level events if total flags are 0
+                    if (tabSwitches === 0 && focusLosses === 0 && fullscreenExits === 0) {
+                      for (const a of interview.answers) {
+                        for (const ev of (a.integrity_events || [])) {
+                          if (ev.type === "tab_switch" || ev.type === "visibility_hidden") tabSwitches++;
+                          else if (ev.type === "window_blur" || ev.type === "blur") focusLosses++;
+                          else if (ev.type === "fullscreen_exit") fullscreenExits++;
+                        }
+                      }
+                    }
+
+                    return (
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                            <ShieldAlert className="size-4 text-amber-500" />
+                            <span>Integrity Monitoring Signals</span>
+                          </div>
+                          <span className="text-[11px] font-medium text-muted-foreground italic">
+                            signals for human review, not proof of misconduct
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 pt-1">
+                          <div className="p-3 rounded-lg bg-white border border-slate-200 text-center">
+                            <span className="text-lg font-bold text-slate-900 block font-mono">{tabSwitches}</span>
+                            <span className="text-[10px] uppercase font-semibold text-muted-foreground">Tab Switches</span>
+                          </div>
+                          <div className="p-3 rounded-lg bg-white border border-slate-200 text-center">
+                            <span className="text-lg font-bold text-slate-900 block font-mono">{focusLosses}</span>
+                            <span className="text-[10px] uppercase font-semibold text-muted-foreground">Focus Losses</span>
+                          </div>
+                          <div className="p-3 rounded-lg bg-white border border-slate-200 text-center">
+                            <span className="text-lg font-bold text-slate-900 block font-mono">{fullscreenExits}</span>
+                            <span className="text-[10px] uppercase font-semibold text-muted-foreground">Fullscreen Exits</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Skills Demonstrated vs Not Demonstrated */}
+                  {(() => {
+                    const sentiment = interview.sentiment_data || {};
+                    const demonstratedSet = new Set<string>(sentiment.skills_demonstrated || []);
+                    const missingSet = new Set<string>(sentiment.skills_missing || []);
+
+                    // Collect from answers if not in sentiment_data
+                    for (const a of interview.answers) {
+                      for (const s of (a.evaluation?.skills_demonstrated || [])) demonstratedSet.add(s);
+                      for (const s of (a.evaluation?.skills_missing || [])) missingSet.add(s);
+                    }
+
+                    const demonstratedList = Array.from(demonstratedSet);
+                    const missingList = Array.from(missingSet);
+
+                    if (demonstratedList.length === 0 && missingList.length === 0) return null;
+
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                        {/* Demonstrated */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                            <CheckCircle2 className="size-3.5 text-emerald-600" />
+                            <span>Skills Demonstrated ({demonstratedList.length})</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {demonstratedList.length > 0 ? (
+                              demonstratedList.map((skill, i) => (
+                                <span
+                                  key={i}
+                                  className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                >
+                                  {skill}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">None recorded</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Not Demonstrated */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-rose-800 uppercase tracking-wider">
+                            <XCircle className="size-3.5 text-rose-600" />
+                            <span>Skills Not Demonstrated ({missingList.length})</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {missingList.length > 0 ? (
+                              missingList.map((skill, i) => (
+                                <span
+                                  key={i}
+                                  className="px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200"
+                                >
+                                  {skill}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">None missed</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Per Answered Question Cards */}
+                  <div className="space-y-5">
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Question-by-Question Evaluation ({interview.answers.length})
+                    </h4>
+
+                    {interview.answers.map((ans, idx) => {
+                      const qObj = (interview.questions || []).find((q) => {
+                        if (typeof q === "object" && q) {
+                          return String(q.id) === String(ans.question_id);
+                        }
+                        return false;
+                      });
+
+                      const questionText =
+                        (typeof qObj === "object" && qObj ? qObj.question || qObj.text : typeof qObj === "string" ? qObj : null) ||
+                        `Question ${idx + 1}`;
+                      const category =
+                        ans.category ||
+                        (typeof qObj === "object" && qObj ? qObj.category : "technical") ||
+                        "technical";
+                      const isFollowUp =
+                        Boolean(ans.is_follow_up) ||
+                        (typeof qObj === "object" && qObj ? Boolean(qObj.is_follow_up || qObj.parent_id) : false);
+
+                      const evalData = ans.evaluation;
+                      const dm = ans.delivery_metrics;
+                      const isExpanded = Boolean(expandedTranscripts[idx]);
+
+                      return (
+                        <div
+                          key={idx}
+                          className="p-5 rounded-xl border border-border/80 bg-slate-50/60 space-y-4 hover:border-indigo-200 transition-colors"
+                        >
+                          {/* Header: Category chip, follow-up marker, rubric score */}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-800">
+                                {category.replace(/_/g, " ")}
+                              </span>
+                              {isFollowUp && (
+                                <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                                  <Sparkles className="size-3 text-amber-600" /> Follow-up Question
+                                </span>
+                              )}
+                            </div>
+
+                            {evalData?.rubric_score !== undefined && evalData.rubric_score !== null && (
+                              <span className="px-2.5 py-1 rounded-lg text-xs font-bold font-mono bg-violet-100 text-violet-800 border border-violet-200">
+                                Rubric Score: {Math.round(evalData.rubric_score)}/100
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Question Text */}
+                          <p className="text-sm font-bold text-gray-900 leading-snug">
+                            {questionText}
+                          </p>
+
+                          {/* Collapsible Transcript */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                                <MessageSquare className="size-3 text-indigo-500" /> Candidate Response
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleTranscript(idx)}
+                                className="h-6 text-xs text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 p-1 px-2 font-medium gap-1"
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronUp className="size-3" /> Collapse Transcript
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="size-3" /> View Full Transcript
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+
+                            {isExpanded ? (
+                              <div className="p-3.5 rounded-lg bg-white border border-gray-200 text-xs text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">
+                                {ans.transcript || "No transcript recorded."}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed bg-white/60 p-2.5 rounded-lg border border-slate-200/60 italic">
+                                “{ans.transcript ? ans.transcript.slice(0, 180) + (ans.transcript.length > 180 ? "..." : "") : "No transcript recorded."}”
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Evidence Quote Callout */}
+                          {evalData?.evidence_quote && (
+                            <div className="p-3 rounded-lg bg-indigo-50/80 border-l-4 border-indigo-500 text-xs text-indigo-950 flex items-start gap-2.5">
+                              <Quote className="size-4 text-indigo-500 shrink-0 mt-0.5" />
+                              <div className="space-y-0.5">
+                                <span className="font-semibold text-[10px] uppercase tracking-wider text-indigo-700 block">
+                                  Evidence Quote
+                                </span>
+                                <p className="italic leading-relaxed">
+                                  “{evalData.evidence_quote}”
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Key Points Covered & Missed */}
+                          {evalData && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                              {/* Key points covered */}
+                              <div className="p-3 rounded-lg bg-white border border-emerald-100 text-xs space-y-1.5">
+                                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                                  <CheckCircle2 className="size-3 text-emerald-600" /> Key Points Covered ({evalData.key_points_covered?.length || 0})
+                                </span>
+                                {evalData.key_points_covered && evalData.key_points_covered.length > 0 ? (
+                                  <ul className="space-y-1">
+                                    {evalData.key_points_covered.map((pt, i) => (
+                                      <li key={i} className="text-emerald-950 text-[11px] flex items-start gap-1.5 leading-snug">
+                                        <span className="size-1 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                                        <span>{pt}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="text-[11px] text-muted-foreground italic">None identified</p>
+                                )}
+                              </div>
+
+                              {/* Key points missed */}
+                              <div className="p-3 rounded-lg bg-white border border-rose-100 text-xs space-y-1.5">
+                                <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider flex items-center gap-1">
+                                  <XCircle className="size-3 text-rose-600" /> Key Points Missed ({evalData.key_points_missed?.length || 0})
+                                </span>
+                                {evalData.key_points_missed && evalData.key_points_missed.length > 0 ? (
+                                  <ul className="space-y-1">
+                                    {evalData.key_points_missed.map((pt, i) => (
+                                      <li key={i} className="text-rose-950 text-[11px] flex items-start gap-1.5 leading-snug">
+                                        <span className="size-1 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                                        <span>{pt}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="text-[11px] text-muted-foreground italic">None missed</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Delivery Chips per Answer */}
+                          {dm && (
+                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80 text-xs">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Delivery:
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-full bg-white text-slate-800 text-[11px] font-medium border border-slate-200">
+                                {Math.round(dm.wpm || 0)} WPM
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-full bg-white text-slate-800 text-[11px] font-medium border border-slate-200">
+                                {Number(dm.longest_pause_sec || 0).toFixed(1)}s longest pause
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-full bg-white text-slate-800 text-[11px] font-medium border border-slate-200">
+                                ~{dm.filler_count ?? dm.filler_words_approx ?? 0} fillers
+                              </span>
+                              <span className="text-[10px] text-muted-foreground italic">
+                                informational, lightly weighted
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

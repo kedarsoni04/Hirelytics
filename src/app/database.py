@@ -70,6 +70,8 @@ def init_db():
             conn.execute(text("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_start TIMESTAMP WITH TIME ZONE;"))
             conn.execute(text("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_end TIMESTAMP WITH TIME ZONE;"))
             conn.execute(text("ALTER TABLE interviews ADD COLUMN IF NOT EXISTS proctor_flags JSONB DEFAULT '[]'::jsonb;"))
+            conn.execute(text("ALTER TABLE interviews ADD COLUMN IF NOT EXISTS answers JSONB DEFAULT '[]'::jsonb;"))
+            conn.execute(text("ALTER TABLE interviews ADD COLUMN IF NOT EXISTS integrity_flags JSONB DEFAULT '{}'::jsonb;"))
             conn.execute(text("ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_status VARCHAR(50) DEFAULT 'pending';"))
             conn.execute(text("ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_letter_url TEXT;"))
             conn.execute(text("ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_responded_at TIMESTAMP WITH TIME ZONE;"))

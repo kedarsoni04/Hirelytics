@@ -253,6 +253,8 @@ class Interview(Base):
     application_id = Column(UUID(as_uuid=False), ForeignKey("applications.id"), unique=True, nullable=False)
 
     questions: Any = Column(JSONB, default=list)
+    answers: Any = Column(JSONB, default=list)
+    integrity_flags: Any = Column(JSONB, default=dict)
     transcript: Any = Column(Text)              # from Whisper (Groq)
     video_url: Any = Column(String)             # optional, if recordings are stored
     sentiment_data: Any = Column(JSONB, default=dict)  # {confidence, tone, filler_word_count, ...}
