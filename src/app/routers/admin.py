@@ -260,3 +260,27 @@ def get_admin_analytics(
         "topCompanies": top_companies,
         "stats": stats,
     }
+
+
+@router.get("/leads")
+def get_admin_leads(
+    current_user: models.User = Depends(get_current_role(models.UserRole.admin)),
+    db: Session = Depends(get_db),
+):
+    leads = db.query(models.Lead).order_by(models.Lead.created_at.desc()).all()
+    return [
+        {
+            "id": l.id,
+            "name": l.name,
+            "work_email": l.work_email,
+            "company": l.company,
+            "role": l.role,
+            "company_size": l.company_size,
+            "hires_per_year": l.hires_per_year,
+            "message": l.message,
+            "source": l.source,
+            "ip": l.ip,
+            "created_at": l.created_at.isoformat() if l.created_at else None,
+        }
+        for l in leads
+    ]

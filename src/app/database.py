@@ -75,5 +75,20 @@ def init_db():
             conn.execute(text("ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_status VARCHAR(50) DEFAULT 'pending';"))
             conn.execute(text("ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_letter_url TEXT;"))
             conn.execute(text("ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_responded_at TIMESTAMP WITH TIME ZONE;"))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS leads (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name VARCHAR(255) NOT NULL,
+                    work_email VARCHAR(255) NOT NULL,
+                    company VARCHAR(255) NOT NULL,
+                    role VARCHAR(255) NOT NULL,
+                    company_size VARCHAR(100),
+                    hires_per_year VARCHAR(100),
+                    message TEXT,
+                    source VARCHAR(255) DEFAULT 'web',
+                    ip VARCHAR(100),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                );
+            """))
     except Exception as e:
         print(f"Schema check error: {e}")

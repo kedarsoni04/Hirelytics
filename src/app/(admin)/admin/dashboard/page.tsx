@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
+import { DataTable, Column } from "@/components/ui/DataTable";
 
 const statIcons: Record<string, React.ElementType> = {
   building: Building2,
@@ -38,6 +39,19 @@ interface PendingCompanyItem {
   logo: string;
 }
 
+
+interface LeadItem {
+  id: string;
+  name: string;
+  work_email: string;
+  company: string;
+  role: string;
+  company_size?: string;
+  hires_per_year?: string;
+  message?: string;
+  created_at: string;
+}
+
 interface ActivityItem {
   id: string;
   text: string;
@@ -51,6 +65,7 @@ export default function AdminDashboardPage() {
   const [pendingCompanies, setPendingCompanies] = useState<PendingCompanyItem[]>([]);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [leads, setLeads] = useState<LeadItem[]>([]);
 
   const loadData = async () => {
     try {
@@ -59,6 +74,14 @@ export default function AdminDashboardPage() {
         setStats(data.stats || []);
         setPendingCompanies(data.pendingCompanies || []);
         setActivities(data.recentActivity || []);
+      }
+      try {
+        const leadsData = await api.getAdminLeads();
+        if (Array.isArray(leadsData)) {
+          setLeads(leadsData);
+        }
+      } catch (err) {
+        console.error("Failed to load admin leads:", err);
       }
     } catch (err) {
       console.error("Failed to load admin stats:", err);
@@ -229,6 +252,38 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
+      </div>
+
+      {/* ── Inbound Leads Table ── */}
+      <div className="space-y-4 pt-4 border-t border-border/60">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-foreground">Inbound Leads</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Prospects who requested a demo through the marketing site.
+            </p>
+          </div>
+          <span className="text-xs font-semibold bg-[#EEF2FF] text-[#4F46E5] px-2.5 py-1 rounded-full">
+            {leads.length} Leads
+          </span>
+        </div>
+        <DataTable
+          data={leads}
+          columns={[
+            { header: "Name", accessorKey: "name", className: "font-semibold text-foreground" },
+            { header: "Work Email", accessorKey: "work_email", className: "text-muted-foreground" },
+            { header: "Company", accessorKey: "company" },
+            { header: "Role", accessorKey: "role" },
+            { header: "Size", cell: (l: LeadItem) => l.company_size || "—" },
+            { header: "Hires/Yr", cell: (l: LeadItem) => l.hires_per_year || "—" },
+            {
+              header: "Date",
+              cell: (l: LeadItem) => l.created_at ? new Date(l.created_at).toLocaleDateString() : "Recently",
+              className: "text-xs text-muted-foreground",
+            },
+          ]}
+          keyExtractor={(l: LeadItem) => l.id}
+        />
       </div>
     </div>
   );

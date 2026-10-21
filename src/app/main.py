@@ -13,7 +13,7 @@ import os
 from app.database import init_db
 from app.routers import (
     auth, drives, applications, assessments,
-    interviews, scorecards, students, notifications, companies, admin,
+    interviews, scorecards, students, notifications, companies, admin, leads,
 )
 
 # ─────────────────────────────────────────────
@@ -29,12 +29,20 @@ def _build_origins() -> list[str]:
     """
     Build allowed CORS origins from environment.
     FRONTEND_URL can be a single URL or a comma-separated list.
+    MARKETING_URL can be a single URL or a comma-separated list.
     Always includes localhost for local dev.
     """
-    raw = os.getenv("FRONTEND_URL", "")
-    origins: list[str] = [o.strip() for o in raw.split(",") if o.strip()]
+    raw_frontend = os.getenv("FRONTEND_URL", "")
+    raw_marketing = os.getenv("MARKETING_URL", "")
+    origins: list[str] = []
+    for raw in (raw_frontend, raw_marketing):
+        if raw:
+            origins.extend([o.strip() for o in raw.split(",") if o.strip()])
     # Always allow local dev
-    origins += ["http://localhost:3000", "http://127.0.0.1:3000"]
+    origins += [
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "http://localhost:3001", "http://127.0.0.1:3001",
+    ]
     # Deduplicate while preserving order
     seen: set[str] = set()
     unique: list[str] = []
@@ -156,6 +164,7 @@ app.include_router(students.router, prefix="/students", tags=["students"])
 app.include_router(companies.router, prefix="/companies", tags=["companies"])
 app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
+app.include_router(leads.router, prefix="/leads", tags=["leads"])
 
 
 @app.get("/")

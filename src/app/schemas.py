@@ -301,3 +301,56 @@ class StudentStatsOut(BaseModel):
     dsa_score: Optional[int] = None
     communication_score: Optional[int] = None
     resume_score: Optional[int] = None
+
+import re
+from pydantic import Field, field_validator, model_validator
+
+def strip_html_tags(value: Any) -> Any:
+    if isinstance(value, str):
+        return re.sub(r"<[^>]*?>", "", value).strip()
+    return value
+
+class LeadCreate(BaseModel):
+    name: str = Field(..., max_length=255)
+    work_email: EmailStr = Field(..., max_length=255)
+    company: str = Field(..., max_length=255)
+    role: str = Field(..., max_length=255)
+    company_size: Optional[str] = Field(None, max_length=100)
+    hires_per_year: Optional[str] = Field(None, max_length=100)
+    message: Optional[str] = Field(None, max_length=3000)
+    source: Optional[str] = Field("web", max_length=255)
+    hp_website: Optional[str] = None
+    website: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "work_email" not in data and "email" in data:
+                data["work_email"] = data["email"]
+            if "company_size" not in data and "companySize" in data:
+                data["company_size"] = data["companySize"]
+            if "hires_per_year" not in data and "hiresPerYear" in data:
+                data["hires_per_year"] = data["hiresPerYear"]
+        return data
+
+    @field_validator("name", "company", "role", "message", "source", mode="before")
+    @classmethod
+    def clean_html(cls, v: Any) -> Any:
+        return strip_html_tags(v)
+
+
+class LeadOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    work_email: str
+    company: str
+    role: str
+    company_size: Optional[str] = None
+    hires_per_year: Optional[str] = None
+    message: Optional[str] = None
+    source: Optional[str] = "web"
+    ip: Optional[str] = None
+    created_at: datetime

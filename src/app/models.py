@@ -292,3 +292,19 @@ class ActivityLog(Base):
     action = Column(String, nullable=False)
     log_metadata = Column(JSONB, default=dict)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Lead(Base):
+    __tablename__ = "leads"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    name = Column(String(255), nullable=False)
+    work_email = Column(String(255), nullable=False, index=True)
+    company = Column(String(255), nullable=False)
+    role = Column(String(255), nullable=False)
+    company_size = Column(String(100), nullable=True)
+    hires_per_year = Column(String(100), nullable=True)
+    message = Column(Text, nullable=True)
+    source = Column(String(255), default="web")
+    ip = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

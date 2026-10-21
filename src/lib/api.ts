@@ -160,6 +160,7 @@ export const api = {
     fetchAPI(`/admin/students/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   getAdminDashboardStats: () => fetchAPI('/admin/dashboard/stats', { method: 'GET' }),
   getAdminAnalytics: () => fetchAPI('/admin/analytics', { method: 'GET' }),
+  getAdminLeads: () => fetchAPI('/admin/leads', { method: 'GET' }),
 };
 
 export const answerInterview = (interviewId: string, formData: FormData) =>
