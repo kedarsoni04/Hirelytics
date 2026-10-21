@@ -120,6 +120,7 @@ class DriveOut(BaseModel):
     status: DriveStatus
     deadline: Optional[datetime]
     created_at: datetime
+    company: Optional[CompanyOut] = None
 
 
 # ─────────────────────────────────────────────

@@ -597,7 +597,7 @@ export default function InterviewPage() {
   // ── Loading state ──
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-[#F8FAFC]">
+      <div className="w-full h-full min-h-full flex flex-col items-center justify-center gap-4 p-6 bg-[#F8FAFC]">
         <Loader2 className="size-8 animate-spin text-[#4F46E5]" />
         <p className="text-sm font-medium text-muted-foreground">Preparing AI Interview Room…</p>
       </div>
@@ -607,9 +607,9 @@ export default function InterviewPage() {
   // ── Error state ──
   if (error || !interview) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-6 bg-[#F8FAFC]">
-        <Card className="border-rose-200 bg-rose-50 max-w-lg w-full">
-          <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
+      <div className="w-full h-full min-h-full overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-[#F8FAFC]">
+        <Card className="border-rose-200 bg-rose-50 max-w-lg w-full my-auto">
+          <CardContent className="flex flex-col items-center gap-3 p-8 sm:p-10 text-center">
             <AlertCircle className="size-8 text-rose-500" />
             <h2 className="text-base font-bold text-rose-800">Interview Not Found</h2>
             <p className="text-xs text-rose-600">
@@ -629,8 +629,8 @@ export default function InterviewPage() {
   // ── Completed state ──
   if (isCompleted) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-6 bg-[#F8FAFC]">
-        <Card className="max-w-md w-full card-shadow border-border/60 text-center p-8 space-y-6 bg-white">
+      <div className="w-full h-full min-h-full overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-[#F8FAFC]">
+        <Card className="max-w-md w-full card-shadow border-border/60 text-center p-6 sm:p-8 space-y-5 my-auto bg-white">
           <div className="size-16 rounded-full bg-[#D1FAE5] text-[#065F46] flex items-center justify-center mx-auto">
             <CheckCircle2 className="size-8 text-emerald-600" />
           </div>
@@ -665,113 +665,115 @@ export default function InterviewPage() {
   // ── Consent Screen (Shown before starting interview) ──
   if (!hasConsented) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-6 bg-[#F8FAFC]">
-        <Card className="max-w-2xl w-full card-shadow border-border/60 bg-white p-8 md:p-10 space-y-6">
-          <div className="flex items-center gap-3 border-b border-border/60 pb-5">
-            <div className="size-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-              <ShieldCheck className="size-6 text-indigo-600" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">AI Video Interview Consent & Guidelines</h1>
-              <p className="text-xs text-muted-foreground">
-                Please review the terms and evaluation policies before starting your interview session.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-4 text-xs text-gray-700">
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-3">
-              <div className="size-6 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-[11px]">
-                1
+      <div className="w-full h-full min-h-full overflow-y-auto bg-[#F8FAFC]">
+        <div className="min-h-full flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
+          <Card className="max-w-2xl w-full my-auto card-shadow border-border/60 bg-white p-5 sm:p-7 space-y-5">
+            <div className="flex items-center gap-3 border-b border-border/60 pb-4">
+              <div className="size-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                <ShieldCheck className="size-6 text-indigo-600" />
               </div>
-              <div className="space-y-1">
-                <p className="font-bold text-gray-900 text-xs">Audio Recording & AI Evaluation</p>
-                <p className="text-muted-foreground leading-relaxed">
-                  Your audio will be recorded, transcribed, and evaluated by automated AI models to assess key technical competencies, analytical reasoning, and core qualifications for this role.
+              <div>
+                <h1 className="text-lg sm:text-xl font-bold text-foreground">AI Video Interview Consent & Guidelines</h1>
+                <p className="text-xs text-muted-foreground">
+                  Please review the terms and evaluation policies before starting your interview session.
                 </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-3">
-              <div className="size-6 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-[11px]">
-                2
+            <div className="space-y-2.5 sm:space-y-3 text-xs text-gray-700">
+              <div className="p-3 sm:p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-3">
+                <div className="size-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-[11px] mt-0.5">
+                  1
+                </div>
+                <div className="space-y-0.5">
+                  <p className="font-bold text-gray-900 text-xs">Audio Recording & AI Evaluation</p>
+                  <p className="text-muted-foreground leading-relaxed text-[11px] sm:text-xs">
+                    Your audio will be recorded, transcribed, and evaluated by automated AI models to assess key technical competencies, analytical reasoning, and core qualifications for this role.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="font-bold text-gray-900 text-xs">Delivery Metrics (Informational & Lightly Weighted)</p>
-                <p className="text-muted-foreground leading-relaxed">
-                  Delivery metrics (such as words-per-minute, pauses, and filler words) are provided as supplementary context only. They are informational and lightly weighted compared to the substantive technical content of your answers.
-                </p>
+
+              <div className="p-3 sm:p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-3">
+                <div className="size-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-[11px] mt-0.5">
+                  2
+                </div>
+                <div className="space-y-0.5">
+                  <p className="font-bold text-gray-900 text-xs">Delivery Metrics (Informational & Lightly Weighted)</p>
+                  <p className="text-muted-foreground leading-relaxed text-[11px] sm:text-xs">
+                    Delivery metrics (such as words-per-minute, pauses, and filler words) are provided as supplementary context only. They are informational and lightly weighted compared to the substantive technical content of your answers.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 sm:p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-3">
+                <div className="size-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-[11px] mt-0.5">
+                  3
+                </div>
+                <div className="space-y-0.5">
+                  <p className="font-bold text-gray-900 text-xs">Human Hiring Decision-Maker</p>
+                  <p className="text-muted-foreground leading-relaxed text-[11px] sm:text-xs">
+                    AI assessments serve strictly as an assistive evaluation tool. A human recruiter or hiring manager reviews your full interview evidence and makes the final decision on shortlist, offer, or advancement.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 sm:p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 flex items-start gap-3">
+                <div className="size-5 rounded-md bg-indigo-600 text-white flex items-center justify-center shrink-0 font-bold text-[11px] mt-0.5">
+                  4
+                </div>
+                <div className="space-y-0.5">
+                  <p className="font-bold text-indigo-950 text-xs flex items-center gap-1.5">
+                    <ShieldCheck className="size-3.5 text-indigo-600" /> Compulsory Video Camera Proctoring
+                  </p>
+                  <p className="text-indigo-900/80 leading-relaxed text-[11px] sm:text-xs">
+                    Candidate webcam video is mandatory and must remain actively streamed for automated anti-cheat proctoring and identity verification throughout the entire interview session.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 sm:p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-start gap-3">
+                <Info className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-amber-900 text-xs">Integrity Monitoring Notice</p>
+                  <p className="text-amber-800/90 leading-relaxed text-[11px] sm:text-xs">
+                    Browser visibility changes, window focus losses, and fullscreen exits are recorded as informational signals for recruiter review, not conclusive proof of misconduct. Please remain focused on the interview tab.
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-3">
-              <div className="size-6 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-[11px]">
-                3
-              </div>
-              <div className="space-y-1">
-                <p className="font-bold text-gray-900 text-xs">Human Hiring Decision-Maker</p>
-                <p className="text-muted-foreground leading-relaxed">
-                  AI assessments serve strictly as an assistive evaluation tool. A human recruiter or hiring manager reviews your full interview evidence and makes the final decision on shortlist, offer, or advancement.
-                </p>
-              </div>
+            <div className="pt-2 border-t border-border/60 space-y-3.5">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  id="consent-checkbox"
+                  checked={consentChecked}
+                  onChange={(e) => setConsentChecked(e.target.checked)}
+                  className="size-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                />
+                <span className="text-xs font-semibold text-gray-800 leading-snug">
+                  I understand and consent to compulsory webcam video, audio recording, AI transcription and evaluation, and session activity tracking under these terms.
+                </span>
+              </label>
+
+              <Button
+                id="begin-interview-btn"
+                disabled={!consentChecked}
+                onClick={async () => {
+                  try {
+                    await initCamera();
+                  } catch {
+                    // camera optional / fallback
+                  }
+                  setHasConsented(true);
+                }}
+                className="w-full brand-gradient text-white font-bold h-10 sm:h-11 text-xs sm:text-sm shadow-md shadow-indigo-500/20 disabled:opacity-50"
+              >
+                Begin Interview <ChevronRight className="size-4 ml-2" />
+              </Button>
             </div>
-
-            <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200/80 flex items-start gap-3">
-              <div className="size-6 rounded-md bg-indigo-600 text-white flex items-center justify-center shrink-0 font-bold text-[11px]">
-                4
-              </div>
-              <div className="space-y-1">
-                <p className="font-bold text-indigo-950 text-xs flex items-center gap-1.5">
-                  <ShieldCheck className="size-3.5 text-indigo-600" /> Compulsory Video Camera Proctoring
-                </p>
-                <p className="text-indigo-900/80 leading-relaxed text-[11px]">
-                  Candidate webcam video is mandatory and must remain actively streamed for automated anti-cheat proctoring and identity verification throughout the entire interview session.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-start gap-3">
-              <Info className="size-4 text-amber-600 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-bold text-amber-900 text-xs">Integrity Monitoring Notice</p>
-                <p className="text-amber-800/90 leading-relaxed text-[11px]">
-                  Browser visibility changes, window focus losses, and fullscreen exits are recorded as informational signals for recruiter review, not conclusive proof of misconduct. Please remain focused on the interview tab.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-border/60 space-y-4">
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                id="consent-checkbox"
-                checked={consentChecked}
-                onChange={(e) => setConsentChecked(e.target.checked)}
-                className="size-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-              />
-              <span className="text-xs font-semibold text-gray-800 leading-snug">
-                I understand and consent to compulsory webcam video, audio recording, AI transcription and evaluation, and session activity tracking under these terms.
-              </span>
-            </label>
-
-            <Button
-              id="begin-interview-btn"
-              disabled={!consentChecked}
-              onClick={async () => {
-                try {
-                  await initCamera();
-                } catch {
-                  // camera optional / fallback
-                }
-                setHasConsented(true);
-              }}
-              className="w-full brand-gradient text-white font-bold h-11 text-sm shadow-md shadow-indigo-500/20 disabled:opacity-50"
-            >
-              Begin Interview <ChevronRight className="size-4 ml-2" />
-            </Button>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
     );
   }

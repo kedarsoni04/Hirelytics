@@ -513,9 +513,10 @@ export default function AssessmentPage() {
   // ── Pre-exam anti-cheat acknowledgement screen ───────────────────────────
   if (!acknowledged) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-6 bg-[#F8FAFC]">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-border/60">
-          {/* Header */}
+      <div className="w-full h-full min-h-full overflow-y-auto bg-[#F8FAFC]">
+        <div className="min-h-full flex flex-col items-center justify-center p-4 sm:p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-border/60 my-auto">
+            {/* Header */}
           <div className="px-8 py-6 bg-gradient-to-br from-[#4F46E5] to-[#7C3AED] text-white">
             <div className="flex items-center gap-3 mb-3">
               <div className="size-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
@@ -571,8 +572,9 @@ export default function AssessmentPage() {
           </div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="flex h-full">

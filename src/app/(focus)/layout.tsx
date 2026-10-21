@@ -23,7 +23,7 @@ export default function FocusLayout({ children }: { children: React.ReactNode })
       </header>
 
       {/* Main content area */}
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 min-h-0 overflow-y-auto">
         {children}
       </main>
     </div>
